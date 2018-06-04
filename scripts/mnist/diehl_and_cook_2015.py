@@ -29,6 +29,8 @@ parser.set_defaults(plot=False, gpu=False, train=True)
 
 locals().update(vars(parser.parse_args()))
 
+assert n_train % update_interval == 0 and n_test % update_interval == 0, 'No. examples must be divisible by update_interval'
+
 params = [seed, n_neurons, n_train, n_test,
 		  excite, inhib, time, dt, intensity,
 		  progress_interval, update_interval]
@@ -65,6 +67,9 @@ else:
 	path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
 	network = load_network(os.path.join(path, model_name))
 	network.connections[('X', 'Ae')].update_rule = None
+	network.layers['Ae'] = LIFNodes(n=network.layers['Ae'].n,
+									thresh=network.layers['Ae'].thresh + network.layers['Ae'].theta)
+	network.connections[('Ae', 'Ai')].source = network.layers['Ae']
 
 # Voltage recording for excitatory and inhibitory layers.
 exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
@@ -195,6 +200,8 @@ for i in range(n_examples):
 
 print('Progress: %d / %d (%.4f seconds)' % (n_examples, n_examples, t() - start))
 
+i += 1
+
 # Get network predictions.
 all_activity_pred = all_activity(spike_record, assignments, 10)
 proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
@@ -225,7 +232,11 @@ path = os.path.join('..', '..', 'results', 'diehl_and_cook_2015_mnist')
 if not os.path.isdir(path):
 	os.makedirs(path)
 
-to_write = params + [np.mean(accuracy['all']), np.mean(accuracy['proportion'])]
+if train:
+	to_write = params + [np.max(accuracy['all']), np.max(accuracy['proportion'])]
+else:
+	to_write = params + [np.mean(accuracy['all']), np.mean(accuracy['proportion'])]
+
 to_write = [str(x) for x in to_write]
 
 if train:
