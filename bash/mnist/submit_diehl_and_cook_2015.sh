@@ -5,6 +5,7 @@
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
 #SBATCH --output=../output/diehl_and_cook_2015_mnist_%j.out
+#SBATCH --cpus-per-task=8
 
 seed=${1:-0}
 n_neurons=${2:-100}
