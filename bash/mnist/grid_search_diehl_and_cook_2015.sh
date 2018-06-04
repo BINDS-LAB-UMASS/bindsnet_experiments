@@ -1,4 +1,4 @@
-for seed in 1 2 3
+for seed in 1 2
 do
 	for n_neurons in 100 250 500 750 1000
 	do 
@@ -6,9 +6,9 @@ do
 		do
 			for n_test in 10000
 			do
-				for excite in 15 25 35
+				for excite in 17.5 20 22.5 25
 				do
-					for inhib in 15 25 35
+					for inhib in 17.5 20 22.5 25
 					do
 						for time in 350
 						do
