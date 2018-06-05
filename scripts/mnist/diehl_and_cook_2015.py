@@ -27,7 +27,14 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
 
-locals().update(vars(parser.parse_args()))
+args = vars(parser.parse_args())
+locals().update(args)
+
+print(); print('Command-line argument values:')
+for key, value in args.items():
+	print('-', key, ':', value)
+
+print()
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, 'No. examples must be divisible by update_interval'
 
@@ -217,6 +224,21 @@ print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
 print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
 				% (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
 				  np.max(accuracy['proportion'])))
+
+if train:
+	if any([x[-1] > best_accuracy for x in accuracy.values()]):
+		print('New best accuracy! Saving network parameters to disk.\n')
+		
+		# Save network to disk.
+		if train:
+			path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+			if not os.path.isdir(path):
+				os.makedirs(path)
+
+			network.save(os.path.join(path, model_name))
+			p.dump((assignments, proportions, rates), open(os.path.join(path, 'auxiliary.p'), 'wb'))
+
+		best_accuracy = max([x[-1] for x in accuracy.values()])
 
 if train:
 	print('\nTraining complete.\n')
