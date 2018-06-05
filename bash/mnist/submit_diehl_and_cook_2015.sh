@@ -18,6 +18,8 @@ time=${7:-350}
 cd ../../scripts/mnist/
 source activate py36
 
+echo $seed $n_neurons $n_train $n_test $excite $inhib $time
+
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --excite $excite --inhib $inhib --time $time
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
