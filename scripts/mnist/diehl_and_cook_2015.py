@@ -38,11 +38,16 @@ print()
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, 'No. examples must be divisible by update_interval'
 
-params = [seed, n_neurons, n_train, n_test,
-		  excite, inhib, time, dt, intensity,
+params = [seed, n_neurons, n_train, excite,
+		  inhib, time, dt, intensity,
 		  progress_interval, update_interval]
 
 model_name = '_'.join([str(x) for x in params])
+
+if not train:
+	test_params = [seed, n_neurons, n_train, n_test,
+		  		   excite, inhib, time, dt, intensity,
+		  		   progress_interval, update_interval]
 
 np.random.seed(seed)
 
@@ -72,7 +77,7 @@ if train:
 
 else:
 	path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
-	network = load_network(os.path.join(path, model_name))
+	network = load_network(os.path.join(path, model_name + '.p'))
 	network.connections[('X', 'Ae')].update_rule = None
 	network.layers['Ae'] = LIFNodes(n=network.layers['Ae'].n,
 									thresh=network.layers['Ae'].thresh + network.layers['Ae'].theta)
@@ -102,7 +107,7 @@ if train:
 	rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
 	path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
-	assignments, proportions, rates = p.load(open(os.path.join(path, 'auxiliary.p'), 'rb'))
+	assignments, proportions, rates = p.load(open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'rb'))
 
 # Sequence of accuracy estimates.
 accuracy = {'all' : [], 'proportion' : []}
@@ -154,8 +159,8 @@ for i in range(n_examples):
 					if not os.path.isdir(path):
 						os.makedirs(path)
 
-					network.save(os.path.join(path, model_name))
-					p.dump((assignments, proportions, rates), open(os.path.join(path, 'auxiliary.p'), 'wb'))
+					network.save(os.path.join(path, model_name + '.p'))
+					p.dump((assignments, proportions, rates), open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'wb'))
 
 				best_accuracy = max([x[-1] for x in accuracy.values()])
 
@@ -235,8 +240,8 @@ if train:
 			if not os.path.isdir(path):
 				os.makedirs(path)
 
-			network.save(os.path.join(path, model_name))
-			p.dump((assignments, proportions, rates), open(os.path.join(path, 'auxiliary.p'), 'wb'))
+			network.save(os.path.join(path, model_name + '.p'))
+			p.dump((assignments, proportions, rates), open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'wb'))
 
 		best_accuracy = max([x[-1] for x in accuracy.values()])
 
@@ -257,7 +262,7 @@ if not os.path.isdir(path):
 if train:
 	to_write = params + [np.max(accuracy['all']), np.max(accuracy['proportion'])]
 else:
-	to_write = params + [np.mean(accuracy['all']), np.mean(accuracy['proportion'])]
+	to_write = test_params + [np.mean(accuracy['all']), np.mean(accuracy['proportion'])]
 
 to_write = [str(x) for x in to_write]
 
