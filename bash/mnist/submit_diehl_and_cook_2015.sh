@@ -14,14 +14,19 @@ n_test=${4:-10000}
 excite=${5:-25.0}
 inhib=${6:-25.0}
 time=${7:-350}
+theta_plus=${8:-0.05}
+theta_decay=${9:-1e-7}
+intensity=${10:-0.5}
 
 cd ../../scripts/mnist/
 source activate py36
 
-echo $seed $n_neurons $n_train $n_test $excite $inhib $time
+echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
-							  --n_test $n_test --excite $excite --inhib $inhib --time $time
+							  --n_test $n_test --excite $excite --inhib $inhib --time $time \
+							  --theta_plus $theta_plus --theta_decay $theta_decay --intensity $intensity
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
-							  --n_test $n_test --excite $excite --inhib $inhib --time $time
+							  --n_test $n_test --excite $excite --inhib $inhib --time $time \
+							  --theta_plus $theta_plus --theta_decay $theta_decay --intensity $intensity
 exit
