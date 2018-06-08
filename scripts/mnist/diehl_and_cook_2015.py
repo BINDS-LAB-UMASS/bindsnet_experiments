@@ -84,6 +84,7 @@ else:
     network.layers['Ae'] = LIFNodes(n=network.layers['Ae'].n,
                                     thresh=network.layers['Ae'].thresh + network.layers['Ae'].theta)
     network.connections[('Ae', 'Ai')].source = network.layers['Ae']
+    network.connections[('Ai', 'Ae')].target = network.layers['Ae']
 
 # Voltage recording for excitatory and inhibitory layers.
 exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
@@ -92,7 +93,14 @@ network.add_monitor(exc_voltage_monitor, name='exc_voltage')
 network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
 # Load MNIST data.
-images, labels = MNIST(path=os.path.join('..', '..', 'data', 'MNIST')).get_train()
+dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
+                       download=True)
+
+if train:
+    images, labels = dataset.get_train()
+else:
+    images, labels = dataset.get_test()
+
 images = images.view(-1, 784)
 images *= intensity
 
@@ -175,6 +183,11 @@ for i in range(n_examples):
     
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
+
+    while spikes['Ae'].get('s').t().sum() < 5:
+        sample *= 2
+        inpts = {'X' : sample * 2}
+        network.run(inpts=inpts, time=time)
     
     # Get voltage recording.
     exc_voltages = exc_voltage_monitor.get('v')
@@ -182,7 +195,7 @@ for i in range(n_examples):
     
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Ae'].get('s').t()
-    
+
     # Optionally plot various simulation information.
     if plot:
         inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
