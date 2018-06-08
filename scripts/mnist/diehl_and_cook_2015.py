@@ -81,10 +81,6 @@ else:
     path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Ae')].update_rule = None
-    network.layers['Ae'] = LIFNodes(n=network.layers['Ae'].n,
-                                    thresh=network.layers['Ae'].thresh + network.layers['Ae'].theta)
-    network.connections[('Ae', 'Ai')].source = network.layers['Ae']
-    network.connections[('Ai', 'Ae')].target = network.layers['Ae']
 
 # Voltage recording for excitatory and inhibitory layers.
 exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
