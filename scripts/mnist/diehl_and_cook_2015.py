@@ -100,9 +100,6 @@ else:
 images = images.view(-1, 784)
 images *= intensity
 
-# Lazily encode data as Poisson spike trains.
-data_loader = poisson_loader(data=images, time=time)
-
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
 
@@ -174,15 +171,17 @@ for i in range(n_examples):
             assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
     
     # Get next input sample.
-    sample = next(data_loader)
+    image = images[i]
+    sample = poisson(datum=image, time=time)
     inpts = {'X' : sample}
     
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
 
     while spikes['Ae'].get('s').t().sum() < 5:
-        sample *= 2
-        inpts = {'X' : sample * 2}
+        image *= 2
+        sample = poisson(datum=image, time=time)
+        inpts = {'X' : sample}
         network.run(inpts=inpts, time=time)
     
     # Get voltage recording.
