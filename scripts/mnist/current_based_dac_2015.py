@@ -14,13 +14,13 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
-parser.add_argument('--excite', type=float, default=22.5)
-parser.add_argument('--inhib', type=float, default=50.0)
+parser.add_argument('--excite', type=float, default=17.5)
+parser.add_argument('--inhib', type=float, default=17.5)
 parser.add_argument('--time', type=int, default=350)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
-parser.add_argument('--intensity', type=float, default=0.5)
+parser.add_argument('--intensity', type=float, default=0.25)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--train', dest='train', action='store_true')
@@ -77,6 +77,55 @@ if train:
                                dt=dt,
                                norm=78.4,
                                theta_plus=1)
+
+    network.layers['Ae'] = AdaptiveCurrentLIFNodes(n=n_neurons,
+                                                   traces=True,
+                                                   rest=-65.0,
+                                                   reset=-60.0,
+                                                   thresh=-52.0,
+                                                   refrac=5,
+                                                   decay=1e-2,
+                                                   i_decay=5e-1,
+                                                   trace_tc=5e-2,
+                                                   theta_plus=theta_plus,
+                                                   theta_decay=theta_decay)
+
+    network.layers['Ai'] = CurrentLIFNodes(n=n_neurons,
+                                           traces=False,
+                                           rest=-60.0,
+                                           reset=-45.0,
+                                           thresh=-40.0,
+                                           decay=1e-1,
+                                           i_decay=5e-1,
+                                           refrac=2,
+                                           trace_tc=5e-2)
+
+    network.connections[('X', 'Ae')] = Connection(source=network.layers['X'],
+                                                  target=network.layers['Ae'],
+                                                  w=0.3 * torch.rand(784, n_neurons),
+                                                  update_rule=post_pre,
+                                                  nu_pre=1e-4,
+                                                  nu_post=1e-2,
+                                                  wmin=0,
+                                                  wmax=1,
+                                                  norm=78.4,
+                                                  decay=None)
+
+    network.connections[('Ae', 'Ai')] = Connection(source=network.layers['Ae'],
+                                                   target=network.layers['Ai'],
+                                                   w=excite * torch.diag(torch.ones(network.n_neurons)),
+                                                   wmin=0,
+                                                   wmax=excite,
+                                                   decay=None)
+
+    network.connections[('Ai', 'Ae')] = Connection(source=network.layers['Ai'],
+                                                   target=network.layers['Ae'],
+                                                   w=-inhib * (torch.ones(network.n_neurons,
+                                                                          network.n_neurons) - \
+                                                               torch.diag(torch.ones(network.n_neurons))),
+                                                   wmin=-inhib,
+                                                   wmax=0,
+                                                   decay=None)
 
 else:
     path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
