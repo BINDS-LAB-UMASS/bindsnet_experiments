@@ -18,7 +18,7 @@ do
 								do
 									for intensity in 0.4 0.5 0.6
 									do
-										sbatch submit_diehl_and_cook_2015.sh $seed $n_neurons $n_train $n_test \
+										sbatch test_diehl_and_cook_2015.sh $seed $n_neurons $n_train $n_test \
 											   $excite $inhib $time $theta_plus $theta_decay $intensity
 									done
 								done
