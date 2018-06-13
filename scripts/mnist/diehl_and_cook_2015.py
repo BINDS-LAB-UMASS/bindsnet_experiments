@@ -179,7 +179,9 @@ for i in range(n_examples):
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
 
-    while spikes['Ae'].get('s').t().sum() < 5:
+    retries = 0
+    while spikes['Ae'].get('s').t().sum() < 5 and retries < 3:
+        retries += 1
         image *= 2
         sample = poisson(datum=image, time=time)
         inpts = {'X' : sample}
