@@ -8,53 +8,6 @@ import matplotlib.pyplot as plt
 from bindsnet import *
 from time     import time as t
 
-def get_fully_conv_weights(w, n_filters, kernel_size, conv_size, locations):
-    '''
-    Get the weights from the input to excitatory layer and reshape it to be two
-    dimensional and square.
-    '''
-    # plt.matshow(w, cmap='hot_r'); plt.show()
-
-    # specify the desired shape of the reshaped input -> excitatory weights
-    w_ = torch.zeros((n_filters * kernel_size, kernel_size * conv_size ** 2))
-
-    conv_sqrt = int(np.sqrt(conv_size))
-    filters_sqrt = int(np.sqrt(n_filters))
-    
-    for n in range(conv_size ** 2):
-        for feature in range(n_filters):
-            temp = w[:, feature * (conv_size ** 2) + (n // conv_sqrt) * conv_sqrt + (n % conv_sqrt)]
-            w_[feature * kernel_size : (feature + 1) * kernel_size,
-               n * kernel_size : (n + 1) * kernel_size] = \
-               temp[locations[:, n]].view(kernel_size, kernel_size)
-
-    # plt.matshow(w_, cmap='hot_r'); plt.show()
-
-    if conv_size == 1:
-        sqrt = int(math.ceil(math.sqrt(n_filters)))
-        square = torch.zeros((28 * sqrt, 28 * sqrt))
-
-        for n in range(n_filters):
-            square[(n // sqrt) * 28 : ((n // sqrt) + 1) * 28, 
-                   (n  % sqrt) * 28 : ((n  % sqrt) + 1) * 28] = \
-                   w_[n * 28 : (n + 1) * 28, :]
-
-        return square
-    else:
-        square = torch.zeros((kernel_size * filters_sqrt * conv_size, kernel_size * filters_sqrt * conv_size))
-
-        for n_1 in range(conv_size):
-            for n_2 in range(conv_size):
-                for f_1 in range(filters_sqrt):
-                    for f_2 in range(filters_sqrt):
-                        square[kernel_size * (n_2 * filters_sqrt + f_2) : kernel_size * (n_2 * filters_sqrt + f_2 + 1), \
-                                kernel_size * (n_1 * filters_sqrt + f_1) : kernel_size * (n_1 * filters_sqrt + f_1 + 1)] = \
-                                w_[(f_1 * filters_sqrt + f_2) * kernel_size : (f_1 * filters_sqrt + f_2 + 1) * kernel_size, \
-                                        (n_1 * conv_size + n_2) * kernel_size : (n_1 * conv_size + n_2 + 1) * kernel_size]
-
-        return square
-
-
 print()
 
 parser = argparse.ArgumentParser()
@@ -149,7 +102,7 @@ conv_conn = Connection(input_layer,
                        kernel_size=kernel_size,
                        stride=stride,
                        update_rule=post_pre,
-                       norm=78.4,
+                       norm=50.0,
                        nu_pre=1e-4,
                        nu_post=1e-2,
                        wmax=1.0)
@@ -211,20 +164,19 @@ for i in range(n_train):
     # Optionally plot various simulation information.
     if plot:
         inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        weights1 = get_fully_conv_weights(conv_conn.w, n_filters, kernel_size, conv_size, locations)
         _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
         _voltages = {'Y' : voltages['Y'].get('v').view(n_filters * conv_size ** 2, time)}
 
         if i == 0:
             spike_ims, spike_axes = plot_spikes(_spikes)
-            weights1_im = plot_weights(weights1, wmax=conv_conn.wmax)
+            weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size, conv_size, locations, 28, wmax=conv_conn.wmax)
             # inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
             # voltage_ims, voltage_axes = plot_voltages(_voltages)
             
         else:
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
-            weights1_im = plot_weights(weights1, im=weights1_im)
+            weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size, conv_size, locations, 28, im=weights_im)
             # inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             # voltage_ims, voltage_axes = plot_voltages(_voltages, ims=voltage_ims, axes=voltage_axes)
         
