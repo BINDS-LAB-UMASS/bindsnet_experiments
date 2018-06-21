@@ -8,18 +8,68 @@ import matplotlib.pyplot as plt
 from bindsnet import *
 from time     import time as t
 
+def get_fully_conv_weights(w, n_filters, kernel_size, conv_size, locations):
+    '''
+    Get the weights from the input to excitatory layer and reshape it to be two
+    dimensional and square.
+    '''
+    # plt.matshow(w, cmap='hot_r'); plt.show()
+
+    # specify the desired shape of the reshaped input -> excitatory weights
+    w_ = torch.zeros((n_filters * kernel_size, kernel_size * conv_size ** 2))
+
+    conv_sqrt = int(np.sqrt(conv_size))
+    filters_sqrt = int(np.sqrt(n_filters))
+    
+    for n in range(conv_size ** 2):
+        for feature in range(n_filters):
+            temp = w[:, feature * (conv_size ** 2) + (n // conv_sqrt) * conv_sqrt + (n % conv_sqrt)]
+            w_[feature * kernel_size : (feature + 1) * kernel_size,
+               n * kernel_size : (n + 1) * kernel_size] = \
+               temp[locations[:, n]].view(kernel_size, kernel_size)
+
+    # plt.matshow(w_, cmap='hot_r'); plt.show()
+
+    if conv_size == 1:
+        sqrt = int(math.ceil(math.sqrt(n_filters)))
+        square = torch.zeros((28 * sqrt, 28 * sqrt))
+
+        for n in range(n_filters):
+            square[(n // sqrt) * 28 : ((n // sqrt) + 1) * 28, 
+                   (n  % sqrt) * 28 : ((n  % sqrt) + 1) * 28] = \
+                   w_[n * 28 : (n + 1) * 28, :]
+
+        return square
+    else:
+        square = torch.zeros((kernel_size * filters_sqrt * conv_size, kernel_size * filters_sqrt * conv_size))
+
+        for n_1 in range(conv_size):
+            for n_2 in range(conv_size):
+                for f_1 in range(filters_sqrt):
+                    for f_2 in range(filters_sqrt):
+                        square[kernel_size * (n_2 * filters_sqrt + f_2) : kernel_size * (n_2 * filters_sqrt + f_2 + 1), \
+                                kernel_size * (n_1 * filters_sqrt + f_1) : kernel_size * (n_1 * filters_sqrt + f_1 + 1)] = \
+                                w_[(f_1 * filters_sqrt + f_2) * kernel_size : (f_1 * filters_sqrt + f_2 + 1) * kernel_size, \
+                                        (n_1 * conv_size + n_2) * kernel_size : (n_1 * conv_size + n_2 + 1) * kernel_size]
+
+        return square
+
+
 print()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
+parser.add_argument('--inhib', type=float, default=250.0)
 parser.add_argument('--kernel_size', type=int, default=16)
 parser.add_argument('--stride', type=int, default=4)
-parser.add_argument('--n_filters', type=int, default=25)
+parser.add_argument('--n_filters', type=int, default=16)
 parser.add_argument('--padding', type=int, default=0)
-parser.add_argument('--time', type=int, default=50)
-parser.add_argument('--dt', type=int, default=1.0)
+parser.add_argument('--time', type=int, default=300)
+parser.add_argument('--dt', type=float, default=1.0)
+parser.add_argument('--theta_plus', type=float, default=0.05)
+parser.add_argument('--theta_decay', type=float, default=1e-7)
 parser.add_argument('--intensity', type=float, default=1)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
@@ -29,7 +79,31 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
 
-locals().update(vars(parser.parse_args()))
+args = vars(parser.parse_args())
+locals().update(args)
+
+print(); print('Command-line argument values:')
+for key, value in args.items():
+    print('-', key, ':', value)
+
+print()
+
+assert n_train % update_interval == 0 and n_test % update_interval == 0, \
+                        'No. examples must be divisible by update_interval'
+
+params = [seed, kernel_size, stride, n_filters, n_train,
+          inhib, time, dt, theta_plus, theta_decay,
+          intensity, progress_interval, update_interval]
+
+model_name = '_'.join([str(x) for x in params])
+
+if not train:
+    test_params = [seed, kernel_size, stride, n_filters, n_train,
+                   n_test, inhib, time, dt, theta_plus,
+                   theta_decay, intensity, progress_interval,
+                   update_interval]
+
+np.random.seed(seed)
 
 if gpu:
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -45,36 +119,49 @@ if kernel_size == 28:
 else:
 	conv_size = int((28 - kernel_size + 2 * padding) / stride) + 1
 
-per_class = int((n_filters * conv_size * conv_size) / 10)
+locations = torch.zeros(kernel_size, kernel_size, conv_size ** 2).long()
+for c in range(conv_size ** 2):
+    for k1 in range(kernel_size):
+        for k2 in range(kernel_size):
+            locations[k1, k2, c] = (c % conv_size) * stride + (c // conv_size) * stride * 28 + k1 * 28 + k2
+
+locations = locations.view(kernel_size ** 2, conv_size ** 2)
 
 # Build network.
 network = Network()
 input_layer = Input(n=784,
-                    shape=(1, 1, 28, 28),
                     traces=True)
 
 conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size,
-                        shape=(1, n_filters, conv_size, conv_size),
-                        traces=True)
+                               traces=True)
 
-conv_conn = Conv2dConnection(input_layer,
-                             conv_layer,
-                             kernel_size=kernel_size,
-                             stride=stride,
-                             update_rule=post_pre,
-                             norm=0.4 * kernel_size ** 2,
-                             nu_pre=1e-4,
-                             nu_post=1e-2,
-                             wmax=1.0)
+w = torch.zeros(input_layer.n, conv_layer.n)
+for f in range(n_filters):
+    for c in range(conv_size ** 2):
+        for k in range(kernel_size ** 2):
+            w[locations[k, c], f * (conv_size ** 2) + c] = np.random.rand()
 
-w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, conv_size)
+mask = w == 0
+
+conv_conn = Connection(input_layer,
+                       conv_layer,
+                       w=w,
+                       kernel_size=kernel_size,
+                       stride=stride,
+                       update_rule=post_pre,
+                       norm=78.4,
+                       nu_pre=1e-4,
+                       nu_post=1e-2,
+                       wmax=1.0)
+
+w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
 for fltr1 in range(n_filters):
     for fltr2 in range(n_filters):
         if fltr1 != fltr2:
             for i in range(conv_size):
                 for j in range(conv_size):
-                    w[0, fltr1, i, j, 0, fltr2, i, j] = -100.0
-                    
+                    w[fltr1, i, j, fltr2, i, j] = -inhib
+
 recurrent_conn = Connection(conv_layer,
                             conv_layer,
                             w=w)
@@ -114,33 +201,32 @@ for i in range(n_train):
         print('Progress: %d / %d (%.4f seconds)' % (i, n_train, t() - start)); start = t()
     
     # Get next input sample.
-    sample = next(data_loader).unsqueeze(1).unsqueeze(1)
+    sample = next(data_loader).view(time, -1)
     inpts = {'X' : sample}
     
     # Run the network on the input.
-    # choice = torch.bernoulli(0.01 * torch.rand(1, 16, 24, 24))
-    # clamp = {'Y' : choice.byte()}
-    network.run(inpts=inpts, time=time) # , clamp=clamp)
+    network.run(inpts=inpts, time=time)
+    network.connections[('X', 'Y')].w.masked_fill_(mask, 0)
     
     # Optionally plot various simulation information.
     if plot:
         inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        weights1 = conv_conn.w
+        weights1 = get_fully_conv_weights(conv_conn.w, n_filters, kernel_size, conv_size, locations)
         _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
         _voltages = {'Y' : voltages['Y'].get('v').view(n_filters * conv_size ** 2, time)}
-        
+
         if i == 0:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
             spike_ims, spike_axes = plot_spikes(_spikes)
-            weights1_im = plot_conv2d_weights(weights1, wmax=conv_conn.wmax)
-            voltage_ims, voltage_axes = plot_voltages(_voltages)
+            weights1_im = plot_weights(weights1, wmax=conv_conn.wmax)
+            # inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
+            # voltage_ims, voltage_axes = plot_voltages(_voltages)
             
         else:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
-            weights1_im = plot_conv2d_weights(weights1, im=weights1_im)
-            voltage_ims, voltage_axes = plot_voltages(_voltages, ims=voltage_ims, axes=voltage_axes)
+            weights1_im = plot_weights(weights1, im=weights1_im)
+            # inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            # voltage_ims, voltage_axes = plot_voltages(_voltages, ims=voltage_ims, axes=voltage_axes)
         
         plt.pause(1e-8)
     
