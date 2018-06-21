@@ -20,8 +20,9 @@ do
                                     do
                                         for X_Ae_decay in 0.25 0.5 0.75
                                         do
-                                            sbatch submit_diehl_and_cook_2015.sh $seed $n_neurons $n_train $n_test \
-                                                   $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
+                                            sbatch submit.sh $seed $n_neurons $n_train $n_test \
+                                                   $excite $inhib $time $theta_plus $theta_decay \
+                                                   $intensity $X_Ae_decay
                                         done
                                     done
                                 done

@@ -123,11 +123,10 @@ accuracy = {'all' : [], 'proportion' : [], 'ngram' : []}
 if train:
     best_accuracy = 0
 
-spikes = {}
-
 # Record ngram probabilities
 ngram_counts = {}
 
+spikes = {}
 for layer in set(network.layers) - {'X'}:
     spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
     network.add_monitor(spikes[layer], name='%s_spikes' % layer)
@@ -141,7 +140,7 @@ else:
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
-        print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
+        print(f'Progress: {i} / {n_train} ({t() - start:.4f} seconds)')
         start = t()
 
     if i % update_interval == 0 and i > 0:
@@ -166,13 +165,12 @@ for i in range(n_examples):
         print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                           np.max(accuracy['proportion'])))
-
-        print('N-gram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
+        print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 %(accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
 
         if train:
             if any([x[-1] > best_accuracy for x in accuracy.values()]):
-                print('New best accuracy! Saving network parameters to disk.\n')
+                print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
                 if train:
@@ -188,6 +186,8 @@ for i in range(n_examples):
             # Assign labels to excitatory layer neurons.
             assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
 
+        print()
+
     # Get next input sample.
     image = images[i]
     sample = poisson(datum=image, time=time)
@@ -197,7 +197,7 @@ for i in range(n_examples):
     network.run(inpts=inpts, time=time)
 
     retries = 0
-    while spikes['Ae'].get('s').t().sum() < 5 and retries < 3:
+    while spikes['Ae'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
         sample = poisson(datum=image, time=time)
@@ -240,7 +240,7 @@ for i in range(n_examples):
 
     network._reset()  # Reset state variables.
 
-print('Progress: %d / %d (%.4f seconds)' % (n_examples, n_examples, t() - start))
+print(f'Progress: {n_train} / {n_train} ({t() - start:.4f} seconds)\n')
 
 i += 1
 
@@ -262,13 +262,12 @@ print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
 print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                   np.max(accuracy['proportion'])))
-print('N-gram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
+print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 %(accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
-
 
 if train:
     if any([x[-1] > best_accuracy for x in accuracy.values()]):
-        print('New best accuracy! Saving network parameters to disk.\n')
+        print('New best accuracy! Saving network parameters to disk.')
 
         # Save network to disk.
         if train:

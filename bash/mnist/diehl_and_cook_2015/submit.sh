@@ -4,7 +4,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
-#SBATCH --output=../output/diehl_and_cook_2015_mnist_%j.out
+#SBATCH --output=../../output/diehl_and_cook_2015_mnist_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}
@@ -19,7 +19,7 @@ theta_decay=${9:-1e-7}
 intensity=${10:-0.5}
 X_Ae_decay=${11:-0.5}
 
-cd ../../scripts/mnist/
+cd ../../../scripts/mnist/
 source activate py36
 
 echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
