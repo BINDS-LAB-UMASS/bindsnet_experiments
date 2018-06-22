@@ -118,13 +118,10 @@ else:
     assignments, proportions, rates = p.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
-accuracy = {'all' : [], 'proportion' : [], 'ngram' : []}
+accuracy = {'all' : [], 'proportion' : []}
 
 if train:
     best_accuracy = 0
-
-# Record ngram probabilities
-ngram_counts = {}
 
 spikes = {}
 for layer in set(network.layers) - {'X'}:
@@ -144,11 +141,7 @@ for i in range(n_examples):
         start = t()
 
     if i % update_interval == 0 and i > 0:
-        # Update n-gram counts based on spiking activity
-        ngram_counts = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_counts)
-
         # Get network predictions.
-        ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
 
@@ -157,8 +150,6 @@ for i in range(n_examples):
                                                 == all_activity_pred) / update_interval)
         accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
-        accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == ngram_pred) / update_interval)
 
         print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
