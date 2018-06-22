@@ -319,7 +319,7 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', 'locally_connected')
+            path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -339,7 +339,7 @@ for scheme in accuracy.keys():
     print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', 'locally_connected')
+path = os.path.join('..', '..', 'results', 'locally_connected_mnist')
 if not os.path.isdir(path):
     os.makedirs(path)
 
