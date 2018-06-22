@@ -129,7 +129,7 @@ if train:
     network.add_connection(conv_conn, source='X', target='Y')
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
-    path = os.path.join('..', '..', 'params', 'fully_conv_mnist')
+    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Y')].update_rule = None
 
@@ -159,7 +159,7 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
-    path = os.path.join('..', '..', 'params', 'fully_conv_mnist')
+    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
     assignments, proportions, rates = p.load(open(path, 'rb'))
 
@@ -220,7 +220,7 @@ for i in range(n_examples):
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', 'fully_conv_mnist')
+                    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
@@ -271,14 +271,14 @@ for i in range(n_examples):
 
         if i == 0:
             spike_ims, spike_axes = plot_spikes(_spikes)
-            weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size,
+            weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
                                                  conv_size, locations, 28,
                                                  wmax=conv_conn.wmax)
             # weights_im2 = plot_weights(square_weights)
             
         else:
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size,
+            weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
                                                  conv_size, locations, 28,
                                                  im=weights_im)
             # weights_im2 = plot_weights(square_weights, im=weights_im2)
@@ -319,7 +319,7 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', 'fully_conv_mnist')
+            path = os.path.join('..', '..', 'params', 'locally_connected')
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -339,7 +339,7 @@ for scheme in accuracy.keys():
     print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', 'fully_conv_mnist')
+path = os.path.join('..', '..', 'results', 'locally_connected')
 if not os.path.isdir(path):
     os.makedirs(path)
 
