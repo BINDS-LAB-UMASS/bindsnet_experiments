@@ -19,7 +19,7 @@ parser.add_argument('--kernel_size', type=int, default=16)
 parser.add_argument('--stride', type=int, default=4)
 parser.add_argument('--n_filters', type=int, default=16)
 parser.add_argument('--padding', type=int, default=0)
-parser.add_argument('--time', type=int, default=300)
+parser.add_argument('--time', type=int, default=250)
 parser.add_argument('--dt', type=float, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
@@ -82,7 +82,7 @@ locations = torch.zeros(kernel_size, kernel_size, conv_size ** 2).long()
 for c in range(conv_size ** 2):
     for k1 in range(kernel_size):
         for k2 in range(kernel_size):
-            locations[k1, k2, c] = (c % conv_size) * stride + (c // conv_size) * stride * 28 + k1 * 28 + k2
+            locations[k1, k2, c] = (c % conv_size) * stride * 28 + (c // conv_size) * stride + k1 * 28 + k2
 
 locations = locations.view(kernel_size ** 2, conv_size ** 2)
 
@@ -107,7 +107,7 @@ if train:
                            kernel_size=kernel_size,
                            stride=stride,
                            update_rule=post_pre,
-                           norm=50.0,
+                           norm=0.2 * kernel_size ** 2,
                            nu_pre=1e-4,
                            nu_post=1e-2,
                            wmax=1.0)
@@ -225,12 +225,16 @@ for i in range(n_examples):
                         os.makedirs(path)
 
                     network.save(os.path.join(path, model_name + '.p'))
-                    p.dump((assignments, proportions, rates), open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'wb'))
+                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+                    p.dump((assignments, proportions, rates), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in accuracy.values()])
 
             # Assign labels to excitatory layer neurons.
-            assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
+            assignments, proportions, rates = assign_labels(spike_record,
+                                                            labels[i - update_interval:i],
+                                                            10,
+                                                            rates)
 
         print()
 
@@ -241,6 +245,7 @@ for i in range(n_examples):
 
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
+    network.connections[('X', 'Y')].w.masked_fill_(mask, 0)
 
     retries = 0
     while spikes['Y'].get('s').sum() < 5 and retries < 3:
@@ -260,17 +265,23 @@ for i in range(n_examples):
         _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
 
+        # square_weights = get_square_weights(network.connections[('X', 'Y')].w.view(784, n_neurons),
+                                            # conv_size,
+                                            # 28)
+
         if i == 0:
             spike_ims, spike_axes = plot_spikes(_spikes)
             weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size,
                                                  conv_size, locations, 28,
                                                  wmax=conv_conn.wmax)
+            # weights_im2 = plot_weights(square_weights)
             
         else:
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_fully_conv_weights(conv_conn.w, n_filters, kernel_size,
                                                  conv_size, locations, 28,
                                                  im=weights_im)
+            # weights_im2 = plot_weights(square_weights, im=weights_im2)
         
         plt.pause(1e-8)
     
