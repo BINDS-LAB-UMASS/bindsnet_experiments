@@ -313,14 +313,14 @@ if not os.path.isfile(os.path.join(path, name)):
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,max_all_activity,' + \
-                    'max_proportion_weighting\n')
+                    'max_proportion_weighting,max_ngram\n')
         else:
             f.write('random_seed,n_neurons,n_train,n_test,excite,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,max_all_activity,' + \
-                    'max_proportion_weighting\n')
+                    'max_proportion_weighting,max_ngram\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
