@@ -156,8 +156,6 @@ for i in range(n_examples):
         print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                           np.max(accuracy['proportion'])))
-        print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                %(accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
 
         if train:
             if any([x[-1] > best_accuracy for x in accuracy.values()]):
@@ -236,7 +234,6 @@ print(f'Progress: {n_train} / {n_train} ({t() - start:.4f} seconds)\n')
 i += 1
 
 # Get network predictions.
-ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
 all_activity_pred = all_activity(spike_record, assignments, 10)
 proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
 
@@ -245,16 +242,12 @@ accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                         == all_activity_pred) / update_interval)
 accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
-accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == ngram_pred) / update_interval)
 
 print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
 print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                   np.max(accuracy['proportion'])))
-print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                %(accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
 
 if train:
     if any([x[-1] > best_accuracy for x in accuracy.values()]):
@@ -288,10 +281,8 @@ if not os.path.isdir(path):
 
 results = [np.mean(accuracy['all']),
            np.mean(accuracy['proportion']),
-           np.mean(accuracy['ngram']),
            np.max(accuracy['all']),
-           np.max(accuracy['proportion']),
-           np.max(accuracy['ngram'])]
+           np.max(accuracy['proportion'])]
 
 if train:
     to_write = params + results
@@ -313,14 +304,14 @@ if not os.path.isfile(os.path.join(path, name)):
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,max_all_activity,' + \
-                    'max_proportion_weighting,max_ngram\n')
+                    'max_proportion_weighting\n')
         else:
             f.write('random_seed,n_neurons,n_train,n_test,excite,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,max_all_activity,' + \
-                    'max_proportion_weighting,max_ngram\n')
+                    'max_proportion_weighting\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
