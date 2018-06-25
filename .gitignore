@@ -1,5 +1,8 @@
 results/
 params/
 data/
+curves/
 
 bash/output/
+
+credentials.yml

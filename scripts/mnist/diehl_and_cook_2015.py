@@ -39,6 +39,9 @@ for key, value in args.items():
 
 print()
 
+model = 'diehl_and_cook_2015'
+data = 'mnist'
+
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
@@ -82,7 +85,7 @@ if train:
                                theta_plus=1)
 
 else:
-    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Ae')].update_rule = None
 
@@ -113,7 +116,7 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
-    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
     assignments, proportions, rates = p.load(open(path, 'rb'))
 
@@ -163,7 +166,7 @@ for i in range(n_examples):
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+                    path = os.path.join('..', '..', 'params', f'{model}_{data}')
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
@@ -255,7 +258,7 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+            path = os.path.join('..', '..', 'params', f'{model}_{data}')
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -274,8 +277,23 @@ print('Average accuracies:\n')
 for scheme in accuracy.keys():
     print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
 
+# Save accuracy curves to disk.
+path = os.path.join('..', '..', 'curves', f'{model}_{data}')
+if not os.path.isdir(path):
+    os.makedirs(path)
+
+if train:
+    to_write = ['train'] + params
+else:
+    to_write = ['test'] + params
+
+to_write = [str(x) for x in to_write]
+f = '_'.join(to_write) + '.p'
+
+p.dump((accuracy, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+
 # Save results to disk.
-path = os.path.join('..', '..', 'results', 'diehl_and_cook_2015_mnist')
+path = os.path.join('..', '..', 'results', f'{model}_{data}')
 if not os.path.isdir(path):
     os.makedirs(path)
 

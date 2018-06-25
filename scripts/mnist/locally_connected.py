@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 from bindsnet import *
 from time     import time as t
 
+sys.path.append('..')
+
+from utils import *
+
 print()
 
 parser = argparse.ArgumentParser()
@@ -40,6 +44,9 @@ for key, value in args.items():
     print('-', key, ':', value)
 
 print()
+
+model = 'locally_connected'
+data = 'mnist'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
@@ -129,7 +136,7 @@ if train:
     network.add_connection(conv_conn, source='X', target='Y')
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
-    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Y')].update_rule = None
 
@@ -159,12 +166,12 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
-    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
     assignments, proportions, rates = p.load(open(path, 'rb'))
 
-# Sequence of accuracy estimates.
-accuracy = {'all' : [], 'proportion' : []} #, 'ngram' : []}
+# Accuracy curves recording.
+curves = {'all' : [], 'proportion' : []} #, 'ngram' : []}
 
 if train:
     best_accuracy = 0
@@ -194,33 +201,28 @@ for i in range(n_examples):
         # ngram_counts = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_counts)
 
         # # Get network predictions.
+        pred = {}
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
         # ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
 
         # Compute network accuracy according to available classification strategies.
-        accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == all_activity_pred) / update_interval)
-        accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
-        # accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        # curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
         #                                         == ngram_pred) / update_interval)
 
-        print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                        % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
-        print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                        % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
-                          np.max(accuracy['proportion'])))
-        # print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-        #                 % (accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
+        print_results(curves)
 
         if train:
-            if any([x[-1] > best_accuracy for x in accuracy.values()]):
+            if any([x[-1] > best_accuracy for x in curves.values()]):
                 print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
+                    path = os.path.join('..', '..', 'params', f'{model}_{data}')
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
@@ -228,7 +230,7 @@ for i in range(n_examples):
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
                     p.dump((assignments, proportions, rates), open(path, 'wb'))
 
-                best_accuracy = max([x[-1] for x in accuracy.values()])
+                best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
             assignments, proportions, rates = assign_labels(spike_record,
@@ -297,29 +299,22 @@ proportion_pred = proportion_weighting(spike_record, assignments, proportions, 1
 # ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
 
 # Compute network accuracy according to available classification strategies.
-accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                         == all_activity_pred) / update_interval)
-accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
 # accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
 #                                                 == ngram_pred) / update_interval)
 
-print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
-print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-                % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
-                  np.max(accuracy['proportion'])))
-# print('n-gram accuracy: %.2f (last), %.2f (average), %.2f (best)' \
-#                 %(accuracy['ngram'][-1], np.mean(accuracy['ngram']), np.max(accuracy['ngram'])))
-
+print_results(curves)
 
 if train:
-    if any([x[-1] > best_accuracy for x in accuracy.values()]):
+    if any([x[-1] > best_accuracy for x in curves.values()]):
         print('New best accuracy! Saving network parameters to disk.')
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', 'locally_connected_mnist')
+            path = os.path.join('..', '..', 'params', f'{model}_{data}')
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -327,7 +322,7 @@ if train:
             path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
             p.dump((assignments, proportions, rates), open(path, 'wb'))
 
-        best_accuracy = max([x[-1] for x in accuracy.values()])
+        best_accuracy = max([x[-1] for x in curves.values()])
 
 if train:
     print('\nTraining complete.\n')
@@ -335,18 +330,33 @@ else:
     print('\nTest complete.\n')
 
 print('Average accuracies:\n')
-for scheme in accuracy.keys():
-    print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
+for scheme in curves.keys():
+    print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
 
-# Save results to disk.
-path = os.path.join('..', '..', 'results', 'locally_connected_mnist')
+# Save accuracy curves to disk.
+path = os.path.join('..', '..', 'curves', f'{model}_{data}')
 if not os.path.isdir(path):
     os.makedirs(path)
 
-results = [np.mean(accuracy['all']),
-           np.mean(accuracy['proportion']),
-           np.max(accuracy['all']),
-           np.max(accuracy['proportion'])]
+if train:
+    to_write = ['train'] + params
+else:
+    to_write = ['test'] + params
+
+to_write = [str(x) for x in to_write]
+f = '_'.join(to_write) + '.p'
+
+p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+
+# Save results to disk.
+path = os.path.join('..', '..', 'results', f'{model}_{data}')
+if not os.path.isdir(path):
+    os.makedirs(path)
+
+results = [np.mean(curves['all']),
+           np.mean(curves['proportion']),
+           np.max(curves['all']),
+           np.max(curves['proportion'])]
 
 if train:
     to_write = params + results
