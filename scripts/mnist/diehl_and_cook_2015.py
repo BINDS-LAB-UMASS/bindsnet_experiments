@@ -160,7 +160,7 @@ for i in range(n_examples):
                         % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                           np.max(accuracy['proportion'])))
         print('Ngram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
-                        % (accuracy['ngram'][-1], np.mean(accuracy['proportion']),
+                        % (accuracy['ngram'][-1], np.mean(accuracy['ngram']),
                           np.max(accuracy['ngram'])))
 
         if train:
