@@ -120,6 +120,8 @@ if train:
     best_accuracy = 0
 
 spikes = {}
+ngram_scores = {}
+
 for layer in set(network.layers) - {'X'}:
     spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
     network.add_monitor(spikes[layer], name='%s_spikes' % layer)
@@ -300,7 +302,7 @@ if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         f.write('random seed,no. neurons,no. train,no. test,excitation,' + \
                 'inhibition,sim. time,timestep,intensity,progress int.,' + \
-                'update int.,all activity,proportion weightin, ngramg\n')
+                'update int.,all activity,proportion weightin, ngram\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
