@@ -67,7 +67,7 @@ else:
 
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
-    
+
 # Build network.
 if train:
     network = DiehlAndCook2015(n_inpt=784,
@@ -114,7 +114,7 @@ else:
     assignments, proportions, rates = p.load(open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'rb'))
 
 # Sequence of accuracy estimates.
-accuracy = {'all' : [], 'proportion' : []}
+accuracy = {'all' : [], 'proportion' : [], 'ngram' : []}
 
 if train:
     best_accuracy = 0
@@ -131,13 +131,16 @@ else:
     print('\nBegin test.\n')
 
 start = t()
-for i in range(n_examples):    
+for i in range(n_examples):
     if i % progress_interval == 0:
         print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
         start = t()
-    
+
     if i % update_interval == 0 and i > 0:
+        ngram_scores = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_scores)
+
         # Get network predictions.
+        ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
 
@@ -146,17 +149,22 @@ for i in range(n_examples):
                                                 == all_activity_pred) / update_interval)
         accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                         == proportion_pred) / update_interval)
+        accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+                                                        == ngram_pred) / update_interval)
 
         print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
         print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
                         % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                           np.max(accuracy['proportion'])))
+        print('Ngram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
+                        % (accuracy['ngram'][-1], np.mean(accuracy['proportion']),
+                          np.max(accuracy['ngram'])))
 
         if train:
             if any([x[-1] > best_accuracy for x in accuracy.values()]):
                 print('New best accuracy! Saving network parameters to disk.\n')
-                
+
                 # Save network to disk.
                 if train:
                     path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
@@ -170,12 +178,12 @@ for i in range(n_examples):
 
             # Assign labels to excitatory layer neurons.
             assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
-    
+
     # Get next input sample.
     image = images[i]
     sample = poisson(datum=image, time=time)
     inpts = {'X' : sample}
-    
+
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
 
@@ -186,11 +194,11 @@ for i in range(n_examples):
         sample = poisson(datum=image, time=time)
         inpts = {'X' : sample}
         network.run(inpts=inpts, time=time)
-    
+
     # Get voltage recording.
     exc_voltages = exc_voltage_monitor.get('v')
     inh_voltages = inh_voltage_monitor.get('v')
-    
+
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Ae'].get('s').t()
 
@@ -201,7 +209,7 @@ for i in range(n_examples):
         square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
         square_assignments = get_square_assignments(assignments, n_sqrt)
         voltages = {'Ae' : exc_voltages, 'Ai' : inh_voltages}
-        
+
         if i == 0:
             inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
             spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes})
@@ -209,7 +217,7 @@ for i in range(n_examples):
             assigns_im = plot_assignments(square_assignments)
             perf_ax = plot_performance(accuracy)
             voltage_ims, voltage_axes = plot_voltages(voltages)
-            
+
         else:
             inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes},
@@ -218,9 +226,9 @@ for i in range(n_examples):
             assigns_im = plot_assignments(square_assignments, im=assigns_im)
             perf_ax = plot_performance(accuracy, ax=perf_ax)
             voltage_ims, voltage_axes = plot_voltages(voltages, ims=voltage_ims, axes=voltage_axes)
-        
+
         plt.pause(1e-8)
-    
+
     network._reset()  # Reset state variables.
 
 print('Progress: %d / %d (%.4f seconds)' % (n_examples, n_examples, t() - start))
@@ -236,17 +244,21 @@ accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                         == all_activity_pred) / update_interval)
 accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
+accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+                                                        == ngram_pred) / update_interval)
 
 print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
 print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                 % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                   np.max(accuracy['proportion'])))
-
+print('Ngram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
+                        % (accuracy['ngram'][-1], np.mean(accuracy['proportion']),
+                          np.max(accuracy['ngram'])))
 if train:
     if any([x[-1] > best_accuracy for x in accuracy.values()]):
         print('New best accuracy! Saving network parameters to disk.\n')
-        
+
         # Save network to disk.
         if train:
             path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
@@ -273,9 +285,9 @@ if not os.path.isdir(path):
     os.makedirs(path)
 
 if train:
-    to_write = params + [np.max(accuracy['all']), np.max(accuracy['proportion'])]
+    to_write = params + [np.max(accuracy['all']), np.max(accuracy['proportion']), np.max(accuracy['ngram'])]
 else:
-    to_write = test_params + [np.mean(accuracy['all']), np.mean(accuracy['proportion'])]
+    to_write = test_params + [np.mean(accuracy['all']), np.mean(accuracy['proportion']), np.mean(accuracy['ngram'])]
 
 to_write = [str(x) for x in to_write]
 
@@ -288,7 +300,7 @@ if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         f.write('random seed,no. neurons,no. train,no. test,excitation,' + \
                 'inhibition,sim. time,timestep,intensity,progress int.,' + \
-                'update int.,all activity,proportion weighting\n')
+                'update int.,all activity,proportion weightin, ngramg\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
