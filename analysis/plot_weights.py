@@ -9,6 +9,8 @@ import pandas as pd
 from bindsnet.utils import *
 from bindsnet.analysis.plotting import *
 
+import download_params
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -24,6 +26,10 @@ if __name__ == '__main__':
     assert param_string is not None, 'Pass "--param_string" argument on command line.'
 
     f = os.path.join('..', 'params', f'{model}_{data}', f'{param_string}.p')
+    if not os.path.isfile(f):
+        print('File not found. Downloading from swarm2 cluster.')
+        download_params.main(model=model, data=data, param_string=param_string)
+
     network = p.load(open(f, 'rb'))
 
     if model in ['diehl_and_cook_2015']:
