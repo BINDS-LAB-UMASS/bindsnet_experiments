@@ -27,13 +27,18 @@ if __name__ == '__main__':
     network = p.load(open(f, 'rb'))
 
     if model in ['diehl_and_cook_2015']:
+        params = param_string.split('_')
+        n_sqrt = int(np.ceil(np.sqrt(int(params[1]))))
+        side = int(np.sqrt(network.layers['X'].n))
+
         w = network.connections[('X', 'Ae')].w
+        w = get_square_weights(w, n_sqrt, side)
+        plot_weights(w)
 
     elif model in ['conv']:
         raise NotImplementedError('Automated plotting not yet implemented for "conv" network model.')
     elif model in ['fully_conv', 'locally_connected']:
         params = param_string.split('_')
-        
         kernel_size = int(params[1])
         stride = int(params[2])
         n_filters = int(params[3])
@@ -56,8 +61,8 @@ if __name__ == '__main__':
         w = network.connections[('X', 'Y')].w
         plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, input_sqrt)
 
-        path = os.path.join('..', 'plots', f'{data}', f'{model}', 'weights')
-        if not os.path.isdir(path):
-            os.makedirs(path)
+    path = os.path.join('..', 'plots', f'{data}', f'{model}', 'weights')
+    if not os.path.isdir(path):
+        os.makedirs(path)
 
-        plt.savefig(os.path.join(path, f'{param_string}.png'))
+    plt.savefig(os.path.join(path, f'{param_string}.png'))
