@@ -145,6 +145,8 @@ for i in range(n_examples):
         ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
+        print(f'predictions: {ngram_pred}')
+        print(f'gold: {labels[i - update_interval:i]}')
 
         # Compute network accuracy according to available classification strategies.
         accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
@@ -156,7 +158,7 @@ for i in range(n_examples):
 
         print('\nAll activity accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['all'][-1], np.mean(accuracy['all']), np.max(accuracy['all'])))
-        print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
+        print('Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)' \
                         % (accuracy['proportion'][-1], np.mean(accuracy['proportion']),
                           np.max(accuracy['proportion'])))
         print('Ngram accuracy: %.2f (last), %.2f (average), %.2f (best)\n' \
