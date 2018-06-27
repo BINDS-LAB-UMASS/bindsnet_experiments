@@ -27,12 +27,12 @@ if __name__ == '__main__':
 
     f = os.path.join('..', 'params', f'{model}_{data}', f'{param_string}.p')
     if not os.path.isfile(f):
-        print('File not found. Downloading from swarm2 cluster.')
+        print('File not found locally. Attempting download from swarm2 cluster.')
         download_params.main(model=model, data=data, param_string=param_string)
 
     network = p.load(open(f, 'rb'))
 
-    if model in ['diehl_and_cook_2015']:
+    if model in ['diehl_and_cook_2015', 'two_level_inhibition']:
         params = param_string.split('_')
         n_sqrt = int(np.ceil(np.sqrt(int(params[1]))))
         side = int(np.sqrt(network.layers['X'].n))

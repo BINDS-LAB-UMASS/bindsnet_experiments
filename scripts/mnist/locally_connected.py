@@ -111,8 +111,6 @@ if train:
     conv_conn = Connection(input_layer,
                            conv_layer,
                            w=w,
-                           kernel_size=kernel_size,
-                           stride=stride,
                            update_rule=post_pre,
                            norm=0.2 * kernel_size ** 2,
                            nu_pre=1e-4,
@@ -193,7 +191,7 @@ else:
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
-        print(f'Progress: {i} / {n_train} ({t() - start:.4f} seconds)')
+        print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
         start = t()
 
     if i % update_interval == 0 and i > 0:
@@ -201,7 +199,6 @@ for i in range(n_examples):
         # ngram_counts = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_counts)
 
         # # Get network predictions.
-        pred = {}
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
         # ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
@@ -289,7 +286,7 @@ for i in range(n_examples):
     
     network._reset()  # Reset state variables.
 
-print(f'Progress: {n_train} / {n_train} ({t() - start:.4f} seconds)\n')
+print(f'Progress: {n_train} / {n_examples} ({t() - start:.4f} seconds)\n')
 
 i += 1
 
