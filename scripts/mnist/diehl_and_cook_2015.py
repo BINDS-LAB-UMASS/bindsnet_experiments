@@ -126,7 +126,7 @@ else:
     assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
-accuracy = {'all' : [], 'proportion' : [], 'ngram' : []}
+curves = {'all' : [], 'proportion' : [], 'ngram' : []}
 
 if train:
     best_accuracy = 0
@@ -156,17 +156,17 @@ for i in range(n_examples):
         ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
         
         # Compute network accuracy according to available classification strategies.
-        accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == all_activity_pred) / update_interval)
-        accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                         == proportion_pred) / update_interval)
-        accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+        curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                         == ngram_pred) / update_interval)
 
-        print_results(accuracy)
+        print_results(curves)
 
         if train:
-            if any([x[-1] > best_accuracy for x in accuracy.values()]):
+            if any([x[-1] > best_accuracy for x in curves.values()]):
                 print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
@@ -179,7 +179,7 @@ for i in range(n_examples):
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
                     p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
-                best_accuracy = max([x[-1] for x in accuracy.values()])
+                best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
             assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
@@ -225,7 +225,7 @@ for i in range(n_examples):
             spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes})
             weights_im = plot_weights(square_weights)
             assigns_im = plot_assignments(square_assignments)
-            perf_ax = plot_performance(accuracy)
+            perf_ax = plot_performance(curves)
             voltage_ims, voltage_axes = plot_voltages(voltages)
 
         else:
@@ -234,14 +234,14 @@ for i in range(n_examples):
                                                 ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
             assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            perf_ax = plot_performance(accuracy, ax=perf_ax)
+            perf_ax = plot_performance(curves, ax=perf_ax)
             voltage_ims, voltage_axes = plot_voltages(voltages, ims=voltage_ims, axes=voltage_axes)
 
         plt.pause(1e-8)
 
     network._reset()  # Reset state variables.
 
-print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)\n')
+print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
 i += 1
 
@@ -251,17 +251,17 @@ proportion_pred = proportion_weighting(spike_record, assignments, proportions, 1
 ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
 
 # Compute network accuracy according to available classification strategies.
-accuracy['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                         == all_activity_pred) / update_interval)
-accuracy['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
-accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                         == ngram_pred) / update_interval)
 
-print_results(accuracy)
+print_results(curves)
 
 if train:
-    if any([x[-1] > best_accuracy for x in accuracy.values()]):
+    if any([x[-1] > best_accuracy for x in curves.values()]):
         print('New best accuracy! Saving network parameters to disk.')
 
         # Save network to disk.
@@ -274,7 +274,7 @@ if train:
             path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
             p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
-        best_accuracy = max([x[-1] for x in accuracy.values()])
+        best_accuracy = max([x[-1] for x in curves.values()])
 
 if train:
     print('\nTraining complete.\n')
@@ -282,8 +282,8 @@ else:
     print('\nTest complete.\n')
 
 print('Average accuracies:\n')
-for scheme in accuracy.keys():
-    print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
+for scheme in curves.keys():
+    print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
 
 # Save accuracy curves to disk.
 path = os.path.join('..', '..', 'curves', data, model)
@@ -298,19 +298,19 @@ else:
 to_write = [str(x) for x in to_write]
 f = '_'.join(to_write) + '.p'
 
-p.dump((accuracy, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 
 # Save results to disk.
 path = os.path.join('..', '..', 'results', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
-results = [np.mean(accuracy['all']),
-           np.mean(accuracy['proportion']),
-	       np.mean(accuracy['ngram']),
-           np.max(accuracy['all']),
-           np.max(accuracy['proportion']),
-           np.max(accuracy['ngram'])]
+results = [np.mean(curves['all']),
+           np.mean(curves['proportion']),
+           np.mean(curves['ngram']),
+           np.max(curves['all']),
+           np.max(curves['proportion']),
+           np.max(curves['ngram'])]
 
 if train:
     to_write = params + results
