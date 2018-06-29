@@ -9,8 +9,8 @@ from itertools import product
 def main(model='diehl_and_cook_2015',
          data='mnist',
          train=True,
-         fix=None,
-         vary=None,
+         fix={},
+         vary=[],
          metric='mean_all_activity',
          top=None):
     """
@@ -18,9 +18,8 @@ def main(model='diehl_and_cook_2015',
     experiments, fix certain parameters to values, and return the results sorted
     in descending order of some metric.
     """
-    name = '_'.join([model, data])
     f = 'train.csv' if train else 'test.csv'
-    path = os.path.join('..', 'results', name, f)
+    path = os.path.join('..', 'results', data, model, f)
 
     df = pd.read_csv(path)
 
@@ -58,10 +57,20 @@ def main(model='diehl_and_cook_2015',
         df = df.sort_values(by=('mean', metric), ascending=False)
 
         if df.size != 0:
+            df.index = df.index.ravel()
+            temp = np.copy(df.index)
+            for i in range(len(temp)):
+                temp[i] = '_'.join(df.index[i])
+
+            df.index = temp
+
             if top is None:
                 averaged[key] = df
             else:
-                averaged[key] = df.head(1)
+                averaged[key] = df.head(top)
+
+    if len(vary) == 0:
+        return averaged[key]
 
     return averaged
 

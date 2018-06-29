@@ -36,9 +36,9 @@ def main(model='diehl_and_cook_2015',
     ssh.connect('swarm2.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
-    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{model}_{data}/')
+    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     
-    localpath = os.path.join('..', 'results', f'{model}_{data}')
+    localpath = os.path.join('..', 'results', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 

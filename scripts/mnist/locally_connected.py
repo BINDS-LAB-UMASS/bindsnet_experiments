@@ -133,7 +133,7 @@ if train:
     network.add_connection(conv_conn, source='X', target='Y')
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
-    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+    path = os.path.join('..', '..', 'params', data, model)
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Y')].update_rule = None
 
@@ -163,7 +163,7 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
-    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+    path = os.path.join('..', '..', 'params', data, model)
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
     assignments, proportions, rates = p.load(open(path, 'rb'))
 
@@ -218,7 +218,7 @@ for i in range(n_examples):
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+                    path = os.path.join('..', '..', 'params', data, model)
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
@@ -300,7 +300,7 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', f'{model}_{data}')
+            path = os.path.join('..', '..', 'params', data, model)
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -320,7 +320,7 @@ for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
 
 # Save accuracy curves to disk.
-path = os.path.join('..', '..', 'curves', f'{model}_{data}')
+path = os.path.join('..', '..', 'curves', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
@@ -335,7 +335,7 @@ f = '_'.join(to_write) + '.p'
 p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', f'{model}_{data}')
+path = os.path.join('..', '..', 'results', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 

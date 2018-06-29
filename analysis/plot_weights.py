@@ -12,20 +12,10 @@ from bindsnet.analysis.plotting import *
 import download_params
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
-    parser.add_argument('--data', type=str, default='mnist')
-    parser.add_argument('--param_string', type=str, default=None)
-    args = parser.parse_args()
+def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
+    assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
-    model = args.model
-    data = args.data
-    param_string = args.param_string
-
-    assert param_string is not None, 'Pass "--param_string" argument on command line.'
-
-    f = os.path.join('..', 'params', f'{model}_{data}', f'{param_string}.p')
+    f = os.path.join('..', 'params', data, model, f'{param_string}.p')
     if not os.path.isfile(f):
         print('File not found locally. Attempting download from swarm2 cluster.')
         download_params.main(model=model, data=data, param_string=param_string)
@@ -67,8 +57,22 @@ if __name__ == '__main__':
         w = network.connections[('X', 'Y')].w
         plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, input_sqrt)
 
-    path = os.path.join('..', 'plots', f'{data}', f'{model}', 'weights')
+    path = os.path.join('..', 'plots', data, model, 'weights')
     if not os.path.isdir(path):
         os.makedirs(path)
 
     plt.savefig(os.path.join(path, f'{param_string}.png'))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
+    parser.add_argument('--data', type=str, default='mnist')
+    parser.add_argument('--param_string', type=str, default=None)
+    args = parser.parse_args()
+
+    model = args.model
+    data = args.data
+    param_string = args.param_string
+
+    main(model, data, param_string)
