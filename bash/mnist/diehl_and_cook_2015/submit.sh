@@ -24,7 +24,7 @@ source activate py36
 echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
-							  --n_test $n_test--inhib $inhib --time $time \
+							  --n_test $n_test --inhib $inhib --time $time \
 							  --theta_plus $theta_plus --theta_decay $theta_decay \
 							  --intensity $intensity --X_Ae_decay $X_Ae_decay
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
