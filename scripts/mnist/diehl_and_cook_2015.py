@@ -49,7 +49,7 @@ data = 'mnist'
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
-params = [seed, n_neurons, n_train, excite,
+params = [seed, n_neurons, n_train,
           inhib, time, dt, theta_plus, theta_decay,
           intensity, progress_interval,
           update_interval, X_Ae_decay]
@@ -57,7 +57,7 @@ params = [seed, n_neurons, n_train, excite,
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
-    test_params = [seed, n_neurons, n_train, n_test, excite,
+    test_params = [seed, n_neurons, n_train, n_test,
                    inhib, time, dt, theta_plus, theta_decay,
                    intensity, progress_interval,
                    update_interval, X_Ae_decay]
@@ -327,14 +327,14 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,excite,' + \
+            f.write('random_seed,n_neurons,n_train,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
                     'max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,excite,' + \
+            f.write('random_seed,n_neurons,n_train,n_test,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \

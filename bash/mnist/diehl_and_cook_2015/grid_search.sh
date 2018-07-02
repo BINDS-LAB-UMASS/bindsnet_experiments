@@ -1,29 +1,26 @@
-for seed in 6
+for seed in 1
 do
-    for n_neurons in 400
+    for n_neurons in 200 300 400 500 600 700 800
     do 
-        for n_train in 30000 60000
+        for n_train in 60000
         do
             for n_test in 10000
             do
-                for excite in 100
+                for inhib in 400 500
                 do
-                    for inhib in {300..750..50}
+                    for time in 200 250 300 350
                     do
-                        for time in 275 350 425 500
+                        for theta_plus in 0.05
                         do
-                            for theta_plus in 0.01 0.05 0.1
+                            for theta_decay in 1e-7
                             do
-                                for theta_decay in 1e-7
+                                for intensity in 0.45
                                 do
-                                    for intensity in 0.4 0.5 0.6
+                                    for X_Ae_decay in 0.0 0.5
                                     do
-                                        for X_Ae_decay in 0.25 0.5 0.75
-                                        do
-                                            sbatch submit.sh $seed $n_neurons $n_train $n_test \
-                                                   $excite $inhib $time $theta_plus $theta_decay \
-                                                   $intensity $X_Ae_decay
-                                        done
+                                        sbatch submit.sh $seed $n_neurons $n_train $n_test \
+                                               $inhib $time $theta_plus $theta_decay \
+                                               $intensity $X_Ae_decay
                                     done
                                 done
                             done
