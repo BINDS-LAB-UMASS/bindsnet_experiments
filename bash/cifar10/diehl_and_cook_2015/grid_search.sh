@@ -2,7 +2,7 @@ for seed in 1
 do
     for n_neurons in 25 50 100 150 200 250 300 400 500
     do 
-        for n_train in 60000
+        for n_train in 50000
         do
             for n_test in 10000
             do
