@@ -21,6 +21,7 @@ parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
 parser.add_argument('--intensity', type=float, default=0.5)
+parser.add_argument('--X_Ae_decay', type=float, default=0.5)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--train', dest='train', action='store_true')
@@ -38,19 +39,24 @@ for key, value in args.items():
 
 print()
 
+model = 'diehl_and_cook_2015'
+data = 'mnist'
+
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [seed, n_neurons, n_train, excite,
           inhib, time, dt, theta_plus, theta_decay,
-          intensity, progress_interval, update_interval]
+          intensity, progress_interval,
+          update_interval, X_Ae_decay]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [seed, n_neurons, n_train, n_test, excite,
                    inhib, time, dt, theta_plus, theta_decay,
-                   intensity, progress_interval, update_interval]
+                   intensity, progress_interval,
+                   update_interval, X_Ae_decay]
 
 np.random.seed(seed)
 
@@ -79,7 +85,7 @@ if train:
                                theta_plus=1)
 
 else:
-    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Ae')].update_rule = None
 
@@ -91,7 +97,7 @@ network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
 # Load MNIST data.
 dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
-                       download=True)
+                download=True)
 
 if train:
     images, labels = dataset.get_train()
@@ -110,8 +116,9 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
 else:
-    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
-    assignments, proportions, rates = p.load(open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'rb'))
+    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+    assignments, proportions, rates = p.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
 accuracy = {'all' : [], 'proportion' : [], 'ngram' : []}
@@ -135,7 +142,7 @@ else:
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
-        print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
+        print(f'Progress: {i} / {n_train} ({t() - start:.4f} seconds)')
         start = t()
 
     if i % update_interval == 0 and i > 0:
@@ -167,11 +174,11 @@ for i in range(n_examples):
 
         if train:
             if any([x[-1] > best_accuracy for x in accuracy.values()]):
-                print('New best accuracy! Saving network parameters to disk.\n')
+                print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+                    path = os.path.join('..', '..', 'params', f'{model}_{data}')
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
@@ -183,6 +190,8 @@ for i in range(n_examples):
             # Assign labels to excitatory layer neurons.
             assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
 
+        print()
+
     # Get next input sample.
     image = images[i]
     sample = poisson(datum=image, time=time)
@@ -192,7 +201,7 @@ for i in range(n_examples):
     network.run(inpts=inpts, time=time)
 
     retries = 0
-    while spikes['Ae'].get('s').t().sum() < 5 and retries < 3:
+    while spikes['Ae'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
         sample = poisson(datum=image, time=time)
@@ -235,7 +244,7 @@ for i in range(n_examples):
 
     network._reset()  # Reset state variables.
 
-print('Progress: %d / %d (%.4f seconds)' % (n_examples, n_examples, t() - start))
+print(f'Progress: {n_train} / {n_train} ({t() - start:.4f} seconds)\n')
 
 i += 1
 
@@ -265,12 +274,13 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', 'diehl_and_cook_2015_mnist')
+            path = os.path.join('..', '..', 'params', f'{model}_{data}')
             if not os.path.isdir(path):
                 os.makedirs(path)
 
             network.save(os.path.join(path, model_name + '.p'))
-            p.dump((assignments, proportions, rates), open(os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p'), 'wb'))
+            path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+            p.dump((assignments, proportions, rates), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in accuracy.values()])
 
@@ -283,10 +293,30 @@ print('Average accuracies:\n')
 for scheme in accuracy.keys():
     print('\t%s: %.2f' % (scheme, np.mean(accuracy[scheme])))
 
-# Save results to disk.
-path = os.path.join('..', '..', 'results', 'diehl_and_cook_2015_mnist')
+# Save accuracy curves to disk.
+path = os.path.join('..', '..', 'curves', f'{model}_{data}')
 if not os.path.isdir(path):
     os.makedirs(path)
+
+if train:
+    to_write = ['train'] + params
+else:
+    to_write = ['test'] + params
+
+to_write = [str(x) for x in to_write]
+f = '_'.join(to_write) + '.p'
+
+p.dump((accuracy, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+
+# Save results to disk.
+path = os.path.join('..', '..', 'results', f'{model}_{data}')
+if not os.path.isdir(path):
+    os.makedirs(path)
+
+results = [np.mean(accuracy['all']),
+           np.mean(accuracy['proportion']),
+           np.max(accuracy['all']),
+           np.max(accuracy['proportion'])]
 
 if train:
     to_write = params + [np.max(accuracy['all']), np.max(accuracy['proportion']), np.max(accuracy['ngram'])]
@@ -302,9 +332,20 @@ else:
 
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
-        f.write('random seed,no. neurons,no. train,no. test,excitation,' + \
-                'inhibition,sim. time,timestep,intensity,progress int.,' + \
-                'update int.,all activity,proportion weightin, ngram\n')
+        if train:
+            f.write('random_seed,n_neurons,n_train,excite,' + \
+                    'inhib,time,timestep,theta_plus,theta_decay,' + \
+                    'intensity,progress_interval,update_interval,' + \
+                    'X_Ae_decay,mean_all_activity,' + \
+                    'mean_proportion_weighting,max_all_activity,' + \
+                    'max_proportion_weighting\n')
+        else:
+            f.write('random_seed,n_neurons,n_train,n_test,excite,' + \
+                    'inhib,time,timestep,theta_plus,theta_decay,' + \
+                    'intensity,progress_interval,update_interval,' + \
+                    'X_Ae_decay,mean_all_activity,' + \
+                    'mean_proportion_weighting,max_all_activity,' + \
+                    'max_proportion_weighting\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')

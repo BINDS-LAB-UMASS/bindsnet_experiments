@@ -17,7 +17,7 @@ parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--excite', type=float, default=17.5)
 parser.add_argument('--inhib', type=float, default=17.5)
 parser.add_argument('--time', type=int, default=350)
-parser.add_argument('--dt', type=int, default=1.0)
+parser.add_argument('--dt', type=float, default=0.5)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
 parser.add_argument('--intensity', type=float, default=0.25)
@@ -133,8 +133,8 @@ else:
     network.connections[('X', 'Ae')].update_rule = None
 
 # Voltage recording for excitatory and inhibitory layers.
-exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
-inh_voltage_monitor = Monitor(network.layers['Ai'], ['v'], time=time)
+exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=int(time / dt))
+inh_voltage_monitor = Monitor(network.layers['Ai'], ['v'], time=int(time / dt))
 network.add_monitor(exc_voltage_monitor, name='exc_voltage')
 network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
@@ -148,10 +148,10 @@ else:
     images, labels = dataset.get_test()
 
 images = images.view(-1, 784)
-images *= intensity
+images *= intensity * dt
 
 # Record spikes during the simulation.
-spike_record = torch.zeros(update_interval, time, n_neurons)
+spike_record = torch.zeros(update_interval, int(time / dt), n_neurons)
 
 # Neuron assignments and spike proportions.
 if train:
@@ -170,7 +170,7 @@ if train:
 
 spikes = {}
 for layer in set(network.layers) - {'X'}:
-    spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
+    spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=int(time / dt))
     network.add_monitor(spikes[layer], name='%s_spikes' % layer)
 
 # Train the network.
@@ -222,17 +222,19 @@ for i in range(n_examples):
     
     # Get next input sample.
     image = images[i]
-    sample = poisson(datum=image, time=time)
+    sample = poisson(datum=image, time=int(time / dt))
     inpts = {'X' : sample}
     
     # Run the network on the input.
+    print(int(time / dt))
+    print(sample.size())
     network.run(inpts=inpts, time=time)
 
     while spikes['Ae'].get('s').t().sum() < 5:
         image *= 2
-        sample = poisson(datum=image, time=time)
+        sample = poisson(datum=image, time=int(time / dt))
         inpts = {'X' : sample}
-        network.run(inpts=inpts, time=time)
+        network.run(inpts=inpts, time=int(time / dt))
     
     # Get voltage recording.
     exc_voltages = exc_voltage_monitor.get('v')
@@ -243,7 +245,7 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
+        inpt = inpts['X'].view(int(time / dt), 784).sum(0).view(28, 28)
         input_exc_weights = network.connections[('X', 'Ae')].w
         square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
         square_assignments = get_square_assignments(assignments, n_sqrt)
