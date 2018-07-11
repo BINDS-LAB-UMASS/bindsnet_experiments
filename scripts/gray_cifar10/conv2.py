@@ -40,17 +40,17 @@ else:
 if not train:
     update_interval = n_test
 
-if kernel_size == 28:
+if kernel_size == 32:
 	conv_size = 1
 else:
-	conv_size = int((28 - kernel_size + 2 * padding) / stride) + 1
+	conv_size = int((32 - kernel_size + 2 * padding) / stride) + 1
 
 per_class = int((n_filters * conv_size * conv_size) / 10)
 
 # Build network.
 network = Network()
-input_layer = Input(n=784,
-                    shape=(1, 1, 28, 28),
+input_layer = Input(n=1024,
+                    shape=(1, 1, 32, 32),
                     traces=True)
 
 conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size,
@@ -71,9 +71,11 @@ w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, con
 for fltr1 in range(n_filters):
     for fltr2 in range(n_filters):
         if fltr1 != fltr2:
-            for i in range(conv_size):
-                for j in range(conv_size):
-                    w[0, fltr1, i, j, 0, fltr2, i, j] = -100.0
+            for i1 in range(conv_size):
+                for j1 in range(conv_size):
+                    for i2 in range(conv_size):
+                        for j2 in range(conv_size):
+                            w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -100.0
                     
 recurrent_conn = Connection(conv_layer,
                             conv_layer,
@@ -88,10 +90,17 @@ network.add_connection(recurrent_conn, source='Y', target='Y')
 voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
 network.add_monitor(voltage_monitor, name='output_voltage')
 
-# Load MNIST data.
-images, labels = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
-                       download=True).get_train()
+# Load CIFAR-10 data.
+dataset = CIFAR10(path=os.path.join('..', '..', 'data', 'CIFAR10'),
+                  download=True)
+
+if train:
+    images, labels = dataset.get_train()
+else:
+    images, labels = dataset.get_test()
+
 images *= intensity
+images = images.mean(-1)
 
 # Lazily encode data as Poisson spike trains.
 data_loader = poisson_loader(data=images, time=time)
@@ -118,26 +127,24 @@ for i in range(n_train):
     inpts = {'X' : sample}
     
     # Run the network on the input.
-    # choice = torch.bernoulli(0.01 * torch.rand(1, 16, 24, 24))
-    # clamp = {'Y' : choice.byte()}
-    network.run(inpts=inpts, time=time) # , clamp=clamp)
+    network.run(inpts=inpts, time=time)
     
     # Optionally plot various simulation information.
     if plot:
-        inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
+        inpt = inpts['X'].view(time, 1024).sum(0).view(32, 32)
         weights1 = conv_conn.w
-        _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
+        _spikes = {'X' : spikes['X'].get('s').view(32 ** 2, time),
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
         _voltages = {'Y' : voltages['Y'].get('v').view(n_filters * conv_size ** 2, time)}
         
         if i == 0:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
+            inpt_axes, inpt_ims = plot_input(images[i].view(32, 32), inpt, label=labels[i])
             spike_ims, spike_axes = plot_spikes(_spikes)
             weights1_im = plot_conv2d_weights(weights1, wmax=conv_conn.wmax)
             voltage_ims, voltage_axes = plot_voltages(_voltages)
             
         else:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            inpt_axes, inpt_ims = plot_input(images[i].view(32, 32), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights1_im = plot_conv2d_weights(weights1, im=weights1_im)
             voltage_ims, voltage_axes = plot_voltages(_voltages, ims=voltage_ims, axes=voltage_axes)

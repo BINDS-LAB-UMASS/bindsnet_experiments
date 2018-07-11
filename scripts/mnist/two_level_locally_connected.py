@@ -283,7 +283,7 @@ for i in range(n_examples):
         
         plt.pause(1e-8)
     
-    network._reset()  # Reset state variables.
+    network.reset_()  # Reset state variables.
 
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 

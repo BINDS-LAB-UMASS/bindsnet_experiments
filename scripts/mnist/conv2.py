@@ -71,9 +71,11 @@ w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, con
 for fltr1 in range(n_filters):
     for fltr2 in range(n_filters):
         if fltr1 != fltr2:
-            for i in range(conv_size):
-                for j in range(conv_size):
-                    w[0, fltr1, i, j, 0, fltr2, i, j] = -100.0
+            for i1 in range(conv_size):
+                for j1 in range(conv_size):
+                    for i2 in range(conv_size):
+                        for j2 in range(conv_size):
+                            w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -100.0
                     
 recurrent_conn = Connection(conv_layer,
                             conv_layer,
