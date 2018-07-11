@@ -9,11 +9,12 @@ from paramiko import SSHClient
 from scp import SCPClient
 
 
-def main(model='diehl_and_cook_2015',
+def main(cluster='swarm2',
+         model='diehl_and_cook_2015',
          data='mnist',
-         train=True):
+         param_string=None):
     """
-    Downloads results CSV file from the CICS swarm2 cluster.
+    Downloads training curves for a particular network from a CICS cluster.
     """
     f = os.path.join('..', 'credentials.yml')
 
@@ -26,36 +27,31 @@ def main(model='diehl_and_cook_2015',
     username = creds['username']
     password = creds['password']
 
-    if train:
-        f = 'train.csv'
-    else:
-        f = 'test.csv'
-
     ssh = SSHClient()
     ssh.load_system_host_keys()
-    ssh.connect('swarm2.cs.umass.edu', username=username, password=password)
+    ssh.connect(f'{cluster}.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
-    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
+    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/curves/{data}/{model}/')
     
-    localpath = os.path.join('..', 'results', data, model)
+    localpath = os.path.join('..', 'curves', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 
-    sftp.get(f, os.path.join(localpath, f))
+    sftp.get(param_string + '.p', os.path.join(localpath, param_string + '.p'))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--cluster', type=str, default='swarm2')
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
-    parser.add_argument('--train', dest='train', action='store_true')
-    parser.add_argument('--test', dest='train', action='store_false')
-    parser.set_defaults(train=False)
+    parser.add_argument('--param_string', type=str, required=True)
     args = parser.parse_args()
 
+    cluster = args.cluster
     model = args.model
     data = args.data
-    train = args.train
+    param_string = args.param_string
 
-    main(model, data, train)
+    main(cluster, model, data, param_string)

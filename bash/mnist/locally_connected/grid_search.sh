@@ -1,4 +1,4 @@
-for seed in 6
+for seed in 1 2 3
 do
     for kernel_size in 8 10 12 14 16
     do

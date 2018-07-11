@@ -44,12 +44,12 @@ for key, value in args.items():
 print()
 
 model = 'diehl_and_cook_2015'
-data = 'mnist'
+data = 'cifar10'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
-params = [seed, n_neurons, n_train,
+params = [seed, n_neurons, n_train, excite,
           inhib, time, dt, theta_plus, theta_decay,
           intensity, progress_interval,
           update_interval, X_Ae_decay]
@@ -57,7 +57,7 @@ params = [seed, n_neurons, n_train,
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
-    test_params = [seed, n_neurons, n_train, n_test,
+    test_params = [seed, n_neurons, n_train, n_test, excite,
                    inhib, time, dt, theta_plus, theta_decay,
                    intensity, progress_interval,
                    update_interval, X_Ae_decay]
@@ -80,12 +80,12 @@ start_intensity = intensity
 
 # Build network.
 if train:
-    network = DiehlAndCook2015(n_inpt=784,
+    network = DiehlAndCook2015(n_inpt=32*32*3,
                                n_neurons=n_neurons,
                                exc=excite,
                                inh=inhib,
                                dt=dt,
-                               norm=78.4,
+                               norm=307.2,
                                theta_plus=0.05)
 
 else:
@@ -99,16 +99,16 @@ inh_voltage_monitor = Monitor(network.layers['Ai'], ['v'], time=time)
 network.add_monitor(exc_voltage_monitor, name='exc_voltage')
 network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
-# Load MNIST data.
-dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
-                download=True)
+# Load CIFAR-10 data.
+dataset = CIFAR10(path=os.path.join('..', '..', 'data', 'CIFAR10'),
+                  download=True)
 
 if train:
     images, labels = dataset.get_train()
 else:
     images, labels = dataset.get_test()
 
-images = images.view(-1, 784)
+images = images.view(-1, 3072)
 images *= intensity
 
 # Record spikes during the simulation.
@@ -127,6 +127,9 @@ else:
 
 # Sequence of accuracy estimates.
 curves = {'all' : [], 'proportion' : [], 'ngram' : []}
+
+# Image categories.
+classes = ['none', 'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 if train:
     best_accuracy = 0
@@ -154,7 +157,7 @@ for i in range(n_examples):
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
         ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
-
+        
         # Compute network accuracy according to available classification strategies.
         curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == all_activity_pred) / update_interval)
@@ -214,33 +217,25 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        input_exc_weights = network.connections[('X', 'Ae')].w
-        square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-        square_assignments = get_square_assignments(assignments, n_sqrt)
-        voltages = {'Ae' : exc_voltages, 'Ai' : inh_voltages}
-
+        image = image.view(32, 32, 3) / intensity
+        image /= image.max()
+        inpt = 255 - sample.view(time, 3*32*32).sum(0).view(32, 32, 3).sum(2).float()
+        weights = network.connections[('X', 'Ae')].w.view(32, 32, 3, n_neurons)
+        weights = weights.sum(2).view(32 * 32, n_neurons)
+            
+        # square_assignments = get_square_assignments(assignments, n_sqrt)
+        square_weights = get_square_weights(weights, n_sqrt, 32)
+        
         if i == 0:
-<<<<<<< HEAD
-            #inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
-            # spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes})
-            spike_ims, spike_axes = plot_spikes_new(network, layers=['Ae', 'Ai'], layer_to_monitor={'Ae' : 'Ae_spikes', 'Ai' : 'Ai_spikes'})
-
-            #weights_im = plot_weights(square_weights)
-            #assigns_im = plot_assignments(square_assignments)
-            #perf_ax = plot_performance(accuracy)
-            #voltage_ims, voltage_axes = plot_voltages(voltages)
-
+            inpt_axes, inpt_ims = plot_input(image, inpt, label=labels[i])
+            # assigns_im = plot_assignments(square_assignments, classes=classes)
+            # perf_ax = plot_performance(curves)
+            weights_ax = plot_weights(square_weights)
         else:
-            #inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
-           # spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes},
-           #                                     ims=spike_ims, axes=spike_axes)
-            spike_ims, spike_axes = plot_spikes_new(network, layers=['Ae', 'Ai'], layer_to_monitor={'Ae' : 'Ae_spikes', 'Ai' : 'Ai_spikes'}, ims=spike_ims, axes=spike_axes)
-
-            #weights_im = plot_weights(square_weights, im=weights_im)
-            #assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            #perf_ax = plot_performance(accuracy, ax=perf_ax)
-            #voltage_ims, voltage_axes = plot_voltages(voltages, ims=voltage_ims, axes=voltage_axes)
+            inpt_axes, inpt_ims = plot_input(image, inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
+            # perf_ax = plot_performance(curves, ax=perf_ax)
+            weights_im = plot_weights(square_weights, im=weights_ax)
 
         plt.pause(1e-8)
 
@@ -332,14 +327,14 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,' + \
+            f.write('random_seed,n_neurons,n_train,excite,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \
                     'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
                     'max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,' + \
+            f.write('random_seed,n_neurons,n_train,n_test,excite,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
                     'intensity,progress_interval,update_interval,' + \
                     'X_Ae_decay,mean_all_activity,' + \

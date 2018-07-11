@@ -22,7 +22,6 @@ parser.add_argument('--inhib', type=float, default=250.0)
 parser.add_argument('--kernel_size', type=int, default=16)
 parser.add_argument('--stride', type=int, default=4)
 parser.add_argument('--n_filters', type=int, default=16)
-parser.add_argument('--padding', type=int, default=0)
 parser.add_argument('--time', type=int, default=250)
 parser.add_argument('--dt', type=float, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
@@ -81,7 +80,7 @@ start_intensity = intensity
 if kernel_size == 28:
 	conv_size = 1
 else:
-	conv_size = int((28 - kernel_size + 2 * padding) / stride) + 1
+	conv_size = int((28 - kernel_size) / stride) + 1
 
 n_neurons = n_filters * conv_size ** 2
 
@@ -111,8 +110,6 @@ if train:
     conv_conn = Connection(input_layer,
                            conv_layer,
                            w=w,
-                           kernel_size=kernel_size,
-                           stride=stride,
                            update_rule=post_pre,
                            norm=0.2 * kernel_size ** 2,
                            nu_pre=1e-4,
@@ -136,7 +133,7 @@ if train:
     network.add_connection(conv_conn, source='X', target='Y')
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
-    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+    path = os.path.join('..', '..', 'params', data, model)
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Y')].update_rule = None
 
@@ -165,19 +162,17 @@ if train:
     assignments = -torch.ones_like(torch.Tensor(n_neurons))
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
+    ngram_scores = {}
 else:
-    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+    path = os.path.join('..', '..', 'params', data, model)
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-    assignments, proportions, rates = p.load(open(path, 'rb'))
+    assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
 
 # Accuracy curves recording.
-curves = {'all' : [], 'proportion' : []} #, 'ngram' : []}
+curves = {'all' : [], 'proportion' : [], 'ngram' : []}
 
 if train:
     best_accuracy = 0
-
-# Record ngram probabilities
-# ngram_counts = {}
 
 spikes = {}
 for layer in set(network.layers):
@@ -193,26 +188,22 @@ else:
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
-        print(f'Progress: {i} / {n_train} ({t() - start:.4f} seconds)')
+        print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
         start = t()
 
     if i % update_interval == 0 and i > 0:
-        # # Update n-gram counts based on spiking activity
-        # ngram_counts = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_counts)
-
-        # # Get network predictions.
-        pred = {}
+        # Get network predictions.
         all_activity_pred = all_activity(spike_record, assignments, 10)
         proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
-        # ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
-
+        ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
+        
         # Compute network accuracy according to available classification strategies.
         curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == all_activity_pred) / update_interval)
         curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == proportion_pred) / update_interval)
-        # curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-        #                                         == ngram_pred) / update_interval)
+                                                        == proportion_pred) / update_interval)
+        curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+                                                        == ngram_pred) / update_interval)
 
         print_results(curves)
 
@@ -222,21 +213,21 @@ for i in range(n_examples):
 
                 # Save network to disk.
                 if train:
-                    path = os.path.join('..', '..', 'params', f'{model}_{data}')
+                    path = os.path.join('..', '..', 'params', data, model)
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
                     network.save(os.path.join(path, model_name + '.p'))
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-                    p.dump((assignments, proportions, rates), open(path, 'wb'))
+                    p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
-            assignments, proportions, rates = assign_labels(spike_record,
-                                                            labels[i - update_interval:i],
-                                                            10,
-                                                            rates)
+            assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
+
+            # Compute ngram scores.
+            ngram_scores = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_scores)
 
         print()
 
@@ -267,44 +258,37 @@ for i in range(n_examples):
         _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
 
-        # square_weights = get_square_weights(network.connections[('X', 'Y')].w.view(784, n_neurons),
-                                            # conv_size,
-                                            # 28)
-
         if i == 0:
             spike_ims, spike_axes = plot_spikes(_spikes)
             weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
-                                                 conv_size, locations, 28,
-                                                 wmax=conv_conn.wmax)
-            # weights_im2 = plot_weights(square_weights)
-            
+                                                        conv_size, locations, 28,
+                                                        wmax=conv_conn.wmax)
         else:
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
-                                                 conv_size, locations, 28,
-                                                 im=weights_im)
-            # weights_im2 = plot_weights(square_weights, im=weights_im2)
+                                                        conv_size, locations, 28,
+                                                        im=weights_im)
         
         plt.pause(1e-8)
     
     network._reset()  # Reset state variables.
 
-print(f'Progress: {n_train} / {n_train} ({t() - start:.4f} seconds)\n')
+print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
 i += 1
 
 # Get network predictions.
 all_activity_pred = all_activity(spike_record, assignments, 10)
 proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
-# ngram_pred = ngram(spike_record, ngram_counts, 10, 2)
+ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
 
 # Compute network accuracy according to available classification strategies.
 curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                         == all_activity_pred) / update_interval)
 curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
                                                 == proportion_pred) / update_interval)
-# accuracy['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-#                                                 == ngram_pred) / update_interval)
+curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
+                                                        == ngram_pred) / update_interval)
 
 print_results(curves)
 
@@ -314,13 +298,13 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', f'{model}_{data}')
+            path = os.path.join('..', '..', 'params', data, model)
             if not os.path.isdir(path):
                 os.makedirs(path)
 
             network.save(os.path.join(path, model_name + '.p'))
             path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-            p.dump((assignments, proportions, rates), open(path, 'wb'))
+            p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -334,7 +318,7 @@ for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
 
 # Save accuracy curves to disk.
-path = os.path.join('..', '..', 'curves', f'{model}_{data}')
+path = os.path.join('..', '..', 'curves', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
@@ -349,14 +333,16 @@ f = '_'.join(to_write) + '.p'
 p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', f'{model}_{data}')
+path = os.path.join('..', '..', 'results', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
 results = [np.mean(curves['all']),
            np.mean(curves['proportion']),
+           np.mean(curves['ngram']),
            np.max(curves['all']),
-           np.max(curves['proportion'])]
+           np.max(curves['proportion']),
+           np.max(curves['ngram'])]
 
 if train:
     to_write = params + results
@@ -376,16 +362,18 @@ if not os.path.isfile(os.path.join(path, name)):
             f.write('random_seed,kernel_size,stride,n_filters,' + \
                     'n_train,inhib,time,timestep,' + \
                     'theta_plus,theta_decay,intensity,' + \
-                    'progress_interval,update_interval,' + \
-                    'mean_all_activity,mean_proportion_weighting,' + \
-                    'max_all_activity,max_proportion_weighting\n')
+                    'progress_interval,update_interval,mean_all_activity,' + \
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
+                    'max_proportion_weighting,max_ngram\n')
         else:
             f.write('random_seed,kernel_size,stride,n_filters,' + \
                     'n_train,n_test,inhib,time,timestep,' + \
                     'theta_plus,theta_decay,intensity,' + \
-                    'progress_interval,update_interval,' + \
-                    'mean_all_activity,mean_proportion_weighting,' + \
-                    'max_all_activity,max_proportion_weighting\n')
+                    'progress_interval,update_interval,mean_all_activity,' + \
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
+                    'max_proportion_weighting,max_ngram\n')
 
 with open(os.path.join(path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
+
+print()
