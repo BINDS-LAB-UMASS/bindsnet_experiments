@@ -22,7 +22,7 @@ do
                                         do
                                             sbatch test.sh $seed $n_neurons $n_train $n_test \
                                                    $excite $inhib $time $theta_plus $theta_decay \
-                                                   $intensity $X_Ae_decay
+										done                                                   $intensity $X_Ae_decay
                                     done
                                 done
                             done
