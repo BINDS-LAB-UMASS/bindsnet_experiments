@@ -93,8 +93,12 @@ network = Network()
 input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
 conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size),
                                thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size / 28), refrac=0)
+conv_layer2 = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size),
+                                refrac=0, thresh=-60.0)
 conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=post_pre,
                              norm=kernel_size ** 2, nu_pre=0, nu_post=1e-2, wmax=2.0)
+conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
+                              update_rule=None, norm=kernel_size ** 2, nu_pre=0, nu_post=1e-2, wmax=2.0)
 
 w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, conv_size)
 for fltr1 in range(n_filters):
@@ -111,26 +115,27 @@ for fltr1 in range(n_filters):
         #         for j in range(conv_size):
         #             w[0, fltr1, i, j, 0, fltr2, i, j] = -inhib
         
-        # for i1 in range(conv_size):
-        #     for j1 in range(conv_size):
-        #         for i2 in range(conv_size):
-        #             for j2 in range(conv_size):
-        #                 if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
-        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
-
-        if fltr1 != fltr2:
-            for i1 in range(conv_size):
-                for j1 in range(conv_size):
-                    for i2 in range(conv_size):
-                        for j2 in range(conv_size):
+        for i1 in range(conv_size):
+            for j1 in range(conv_size):
+                for i2 in range(conv_size):
+                    for j2 in range(conv_size):
+                        if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
                             w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
-        
+
+        # if fltr1 != fltr2:
+        #     for i1 in range(conv_size):
+        #         for j1 in range(conv_size):
+        #             for i2 in range(conv_size):
+        #                 for j2 in range(conv_size):
+        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
                     
 recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
 network.add_layer(input_layer, name='X')
 network.add_layer(conv_layer, name='Y')
+network.add_layer(conv_layer2, name='Y_')
 network.add_connection(conv_conn, source='X', target='Y')
+network.add_connection(conv_conn2, source='X', target='Y_')
 network.add_connection(recurrent_conn, source='Y', target='Y')
 
 # Voltage recording for excitatory and inhibitory layers.
@@ -179,7 +184,9 @@ else:
     print('\nBegin test.\n')
 
 start = t()
-for i in range(n_examples):    
+for i in range(n_examples):
+    conv_conn2.w = conv_conn.w
+
     if i % progress_interval == 0:
         print('Progress: %d / %d (%.4f seconds)' % (i, n_train, t() - start))
         start = t()
@@ -232,7 +239,7 @@ for i in range(n_examples):
     network.run(inpts=inpts, time=time)
 
     retries = 0
-    while spikes['Y'].get('s').sum() < 5 and retries < 3:
+    while spikes['Y_'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
         sample = bernoulli(datum=image, time=time, max_prob=0.5).unsqueeze(1).unsqueeze(1)
@@ -240,14 +247,15 @@ for i in range(n_examples):
         network.run(inpts=inpts, time=time)
 
     # Add to spikes recording.
-    spike_record[i % update_interval] = spikes['Y'].get('s').view(time, -1)
-    
+    spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+
     # Optionally plot various simulation information.
     if plot:
         _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        w = conv_conn.w
-        _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
-                   'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
+        w = conv_conn2.w
+        _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
+                   'Y': spikes['Y'].get('s').view(n_filters * conv_size ** 2, time),
+                   'Y_': spikes['Y_'].get('s').view(n_filters * conv_size ** 2, time)}
         
         if i == 0:
             inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), _input, label=labels[i])
@@ -274,7 +282,8 @@ else:
 
 # Update and print accuracy evaluations.
 curves = update_curves(curves, current_labels, n_classes, spike_record=spike_record,
-                       assignments=assignments, ngram_scores=ngram_scores, n=n)
+                       assignments=assignments, proportions=proportions,
+                       ngram_scores=ngram_scores, n=2)
 print_results(curves)
 
 if train:
