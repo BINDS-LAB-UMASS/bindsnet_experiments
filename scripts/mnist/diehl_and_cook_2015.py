@@ -93,15 +93,8 @@ else:
     network = load_network(os.path.join(path, model_name + '.p'))
     network.connections[('X', 'Ae')].update_rule = None
 
-# Voltage recording for excitatory and inhibitory layers.
-exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
-inh_voltage_monitor = Monitor(network.layers['Ai'], ['v'], time=time)
-network.add_monitor(exc_voltage_monitor, name='exc_voltage')
-network.add_monitor(inh_voltage_monitor, name='inh_voltage')
-
 # Load MNIST data.
-dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
-                download=True)
+dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
 
 if train:
     images, labels = dataset.get_train()
@@ -156,12 +149,9 @@ for i in range(n_examples):
         ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
         
         # Compute network accuracy according to available classification strategies.
-        curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == all_activity_pred) / update_interval)
-        curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                        == proportion_pred) / update_interval)
-        curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                        == ngram_pred) / update_interval)
+        curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() == all_activity_pred) / update_interval)
+        curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() == proportion_pred) / update_interval)
+        curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long()  == ngram_pred) / update_interval)
 
         print_results(curves)
 
@@ -205,10 +195,6 @@ for i in range(n_examples):
         inpts = {'X' : sample}
         network.run(inpts=inpts, time=time)
 
-    # Get voltage recording.
-    exc_voltages = exc_voltage_monitor.get('v')
-    inh_voltages = inh_voltage_monitor.get('v')
-
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Ae'].get('s').t()
 
@@ -218,7 +204,6 @@ for i in range(n_examples):
         input_exc_weights = network.connections[('X', 'Ae')].w
         square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
         square_assignments = get_square_assignments(assignments, n_sqrt)
-        voltages = {'Ae' : exc_voltages, 'Ai' : inh_voltages}
 
         if i == 0:
             inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
@@ -226,7 +211,6 @@ for i in range(n_examples):
             weights_im = plot_weights(square_weights)
             assigns_im = plot_assignments(square_assignments)
             perf_ax = plot_performance(curves)
-            voltage_ims, voltage_axes = plot_voltages(voltages)
 
         else:
             inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
@@ -235,11 +219,10 @@ for i in range(n_examples):
             weights_im = plot_weights(square_weights, im=weights_im)
             assigns_im = plot_assignments(square_assignments, im=assigns_im)
             perf_ax = plot_performance(curves, ax=perf_ax)
-            voltage_ims, voltage_axes = plot_voltages(voltages, ims=voltage_ims, axes=voltage_axes)
 
         plt.pause(1e-8)
 
-    network._reset()  # Reset state variables.
+    network.reset_()  # Reset state variables.
 
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 

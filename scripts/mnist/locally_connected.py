@@ -259,19 +259,19 @@ for i in range(n_examples):
                    'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
 
         if i == 0:
-            spike_ims, spike_axes = plot_spikes(_spikes)
+            spike_ims, spike_axes = plot_spikes(spikes=_spikes)
             weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
                                                         conv_size, locations, 28,
                                                         wmax=conv_conn.wmax)
         else:
-            spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
+            spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
                                                         conv_size, locations, 28,
                                                         im=weights_im)
         
         plt.pause(1e-8)
     
-    network._reset()  # Reset state variables.
+    network.reset_()  # Reset state variables.
 
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
