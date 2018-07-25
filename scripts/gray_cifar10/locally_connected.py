@@ -95,11 +95,8 @@ locations = locations.view(kernel_size ** 2, conv_size ** 2)
 # Build network.
 if train:
     network = Network()
-    input_layer = Input(n=32*32,
-                        traces=True)
-
-    conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size,
-                                   traces=True)
+    input_layer = Input(n=32*32, traces=True)
+    conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, traces=True)
 
     w = torch.zeros(32 * 32, conv_layer.n)
     for f in range(n_filters):
@@ -107,15 +104,8 @@ if train:
             for k in range(kernel_size ** 2):
                 w[locations[k, c], f * (conv_size ** 2) + c] = np.random.beta(0.25, 0.25)
 
-    conv_conn = Connection(input_layer,
-                           conv_layer,
-                           w=w,
-                           update_rule=post_pre,
-                           norm=0.02 * kernel_size ** 2,
-                           nu_pre=0,
-                           nu_post=1e-3,
-                           wmin=0.0,
-                           wmax=0.1)
+    conv_conn = Connection(input_layer, conv_layer, w=w, update_rule=post_pre,
+                           norm=0.02 * kernel_size ** 2, nu_pre=0, nu_post=1e-3, wmin=0.0, wmax=0.1)
 
     w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
     for fltr1 in range(n_filters):
@@ -125,9 +115,7 @@ if train:
                     for j in range(conv_size):
                         w[fltr1, i, j, fltr2, i, j] = -inhib
 
-    recurrent_conn = Connection(conv_layer,
-                                conv_layer,
-                                w=w)
+    recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
     network.add_layer(input_layer, name='X')
     network.add_layer(conv_layer, name='Y')
@@ -265,8 +253,7 @@ for i in range(n_examples):
             # assigns_im = plot_assignments(square_assignments, classes=classes)
             # perf_ax = plot_performance(curves)
             weights_im = plot_locally_connected_weights(weights, n_filters, kernel_size,
-                                                        conv_size, locations, 32,
-                                                        wmax=conv_conn.wmax)
+                                                        conv_size, locations, 32, wmax=conv_conn.wmax)
             # weights_im2 = plot_weights(conv_conn.w)
         else:
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
@@ -274,8 +261,7 @@ for i in range(n_examples):
             # assigns_im = plot_assignments(square_assignments, im=assigns_im)
             # perf_ax = plot_performance(curves, ax=perf_ax)
             weights_im = plot_locally_connected_weights(weights, n_filters, kernel_size,
-                                                        conv_size, locations, 32,
-                                                        im=weights_im)
+                                                        conv_size, locations, 32, im=weights_im)
             # weights_im2 = plot_weights(conv_conn.w, im=weights_im2)
 
         plt.pause(1e-8)
