@@ -1,7 +1,7 @@
 for seed in 1
 do
     for n_neurons in 200 300 400 500 600 700 800
-    do 
+    do
         for n_train in 60000
         do
             for n_test in 10000
@@ -18,9 +18,12 @@ do
                                 do
                                     for X_Ae_decay in 0.0 0.5
                                     do
-                                        sbatch submit.sh $seed $n_neurons $n_train $n_test \
-                                               $inhib $time $theta_plus $theta_decay \
-                                               $intensity $X_Ae_decay
+                                        for gram_size in 2 3 4 5
+                                        do
+                                            sbatch submit.sh $seed $n_neurons $n_train $n_test \
+                                                    $inhib $time $theta_plus $theta_decay \
+                                                    $intensity $X_Ae_decay $gram_size
+                                        done
                                     done
                                 done
                             done

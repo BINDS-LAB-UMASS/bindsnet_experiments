@@ -221,10 +221,8 @@ for i in range(n_examples):
         voltages = {'Ae' : exc_voltages, 'Ai' : inh_voltages}
 
         if i == 0:
-<<<<<<< HEAD
             #inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i])
-            # spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes})
-            spike_ims, spike_axes = plot_spikes_new(network, layers=['Ae', 'Ai'], layer_to_monitor={'Ae' : 'Ae_spikes', 'Ai' : 'Ai_spikes'})
+            spike_ims, spike_axes = plot_spikes(spikes={layer : spikes[layer].get('s') for layer in spikes})
 
             #weights_im = plot_weights(square_weights)
             #assigns_im = plot_assignments(square_assignments)
@@ -233,9 +231,7 @@ for i in range(n_examples):
 
         else:
             #inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), inpt, label=labels[i], axes=inpt_axes, ims=inpt_ims)
-           # spike_ims, spike_axes = plot_spikes({layer : spikes[layer].get('s') for layer in spikes},
-           #                                     ims=spike_ims, axes=spike_axes)
-            spike_ims, spike_axes = plot_spikes_new(network, layers=['Ae', 'Ai'], layer_to_monitor={'Ae' : 'Ae_spikes', 'Ai' : 'Ai_spikes'}, ims=spike_ims, axes=spike_axes)
+            spike_ims, spike_axes = plot_spikes(spikes={layer : spikes[layer].get('s') for layer in spikes}, ims=spike_ims, axes=spike_axes)
 
             #weights_im = plot_weights(square_weights, im=weights_im)
             #assigns_im = plot_assignments(square_assignments, im=assigns_im)

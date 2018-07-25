@@ -17,18 +17,22 @@ theta_plus=${7:-0.05}
 theta_decay=${8:-1e-7}
 intensity=${9:-0.5}
 X_Ae_decay=${10:-0.5}
+gram_size=${11:-2}
 
 cd ../../../scripts/mnist/
 source activate py36
 
-echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
+echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay $gram_size
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
 							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --X_Ae_decay $X_Ae_decay
+							  --intensity $intensity --X_Ae_decay $X_Ae_decay --gram_size $gram_size\
+                              >> train_$seed_$n_neurons_$n_train_$n_test_$inhib_$time_$theta_plus_$theta_decay_$intensity_$X_Ae_decay_$gram_size
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
 							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --X_Ae_decay $X_Ae_decay
+							  --intensity $intensity --X_Ae_decay $X_Ae_decay --gram_size $gram_size\
+                              >> test_$seed_$n_neurons_$n_train_$n_test_$inhib_$time_$theta_plus_$theta_decay_$intensity_$X_Ae_decay_$gram_size
+
 exit
