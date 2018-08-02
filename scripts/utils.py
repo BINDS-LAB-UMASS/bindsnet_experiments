@@ -53,3 +53,17 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
         curves[scheme].append(100 * accuracy)
 
     return curves
+
+
+def bit_flip(x: torch.Tensor, p: float) -> torch.Tensor:
+    """
+    Takes a binary tensor and flips each entry with probability p.
+
+    :param x: Arbitrarily shaped binary tensor.
+    :param p: Bit flip probability.
+    """
+    x = x.float()
+    i = torch.bernoulli(p * torch.ones_like(x)).byte()
+    x = x.byte()
+    x[i] = ~x[i]
+    return x.float()

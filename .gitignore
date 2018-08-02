@@ -8,3 +8,5 @@ bash/output/
 credentials.yml
 
 .idea/
+
+scripts/__pycache__/

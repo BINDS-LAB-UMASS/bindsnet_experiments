@@ -13,8 +13,8 @@ from bindsnet.learning import post_pre
 from bindsnet.encoding import bernoulli
 from bindsnet.analysis.plotting import *
 from bindsnet.network.monitors import Monitor
-from bindsnet.network.nodes import Input, DiehlAndCookNodes
 from bindsnet.network.topology import Connection, Conv2dConnection
+from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 
 sys.path.append('..')
 
@@ -93,12 +93,11 @@ network = Network()
 input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
 conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size),
                                thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size / 28), refrac=0)
-conv_layer2 = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size),
-                                refrac=0, thresh=-60.0)
+conv_layer2 = LIFNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size), refrac=0)
 conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=post_pre,
                              norm=kernel_size ** 2, nu_pre=0, nu_post=1e-2, wmax=2.0)
 conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
-                              update_rule=None, norm=kernel_size ** 2, nu_pre=0, nu_post=1e-2, wmax=2.0)
+                              update_rule=None, nu_pre=0, nu_post=1e-2, wmax=2.0)
 
 w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, conv_size)
 for fltr1 in range(n_filters):
@@ -185,7 +184,7 @@ else:
 
 start = t()
 for i in range(n_examples):
-    conv_conn2.w = conv_conn.w
+    conv_conn2.w = conv_conn.w / 10
 
     if i % progress_interval == 0:
         print('Progress: %d / %d (%.4f seconds)' % (i, n_train, t() - start))
@@ -215,18 +214,16 @@ for i in range(n_examples):
 
                     network.save(os.path.join(path, model_name + '.pt'))
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
+
                     torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
-            if i % len(labels) == 0:
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
-            else:
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
+            assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
 
             # Compute ngram scores.
-            ngram_scores = update_ngram_scores(spike_record, labels[i - update_interval:i], n_classes, 2, ngram_scores)
+            ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
         print()
 
@@ -252,7 +249,7 @@ for i in range(n_examples):
     # Optionally plot various simulation information.
     if plot:
         _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        w = conv_conn2.w
+        w = conv_conn.w
         _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
                    'Y': spikes['Y'].get('s').view(n_filters * conv_size ** 2, time),
                    'Y_': spikes['Y_'].get('s').view(n_filters * conv_size ** 2, time)}
