@@ -61,6 +61,15 @@ print()
 model = 'noisy_dac'
 data = 'mnist'
 
+top_level = os.path.join('..', '..')
+params_path = os.path.join(top_level, 'params', data, model)
+curves_path = os.path.join(top_level, 'curves', data, model)
+results_path = os.path.join(top_level, 'results', data, model)
+
+for path in [params_path, curves_path, results_path]:
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
@@ -98,10 +107,8 @@ start_intensity = intensity
 if train:
     network = DiehlAndCook2015(n_inpt=784, n_neurons=n_neurons, exc=excite, inh=inhib, dt=dt, norm=78.4,
                                theta_plus=0.05)
-
 else:
-    path = os.path.join('..', '..', 'params', data, model)
-    network = load_network(os.path.join(path, model_name + '.pt'))
+    network = load_network(os.path.join(params_path, model_name + '.pt'))
     network.connections[('X', 'Ae')].update_rule = None
 
 # Load MNIST data.
@@ -126,8 +133,7 @@ if train:
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
     ngram_scores = {}
 else:
-    path = os.path.join('..', '..', 'params', data, model)
-    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
+    path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
     assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
@@ -166,17 +172,22 @@ for i in range(n_examples):
                                ngram_scores=ngram_scores, n=2)
         print_results(curves)
 
+        # Save accuracy curves to disk.
+        if train:
+            to_write = ['train'] + params
+        else:
+            to_write = ['test'] + params
+
+        f = '_'.join([str(x) for x in to_write]) + '.pt'
+        torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
+
         if train:
             if any([x[-1] > best_accuracy for x in curves.values()]):
                 print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
-                path = os.path.join('..', '..', 'params', data, model)
-                if not os.path.isdir(path):
-                    os.makedirs(path)
-
-                network.save(os.path.join(path, model_name + '.pt'))
-                path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
+                network.save(os.path.join(params_path, model_name + '.pt'))
+                path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
                 torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
@@ -259,12 +270,8 @@ if train:
 
         # Save network to disk.
         if train:
-            path = os.path.join('..', '..', 'params', data, model)
-            if not os.path.isdir(path):
-                os.makedirs(path)
-
-            network.save(os.path.join(path, model_name + '.pt'))
-            path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
+            network.save(os.path.join(params_path, model_name + '.pt'))
+            path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
@@ -279,25 +286,15 @@ for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
 
 # Save accuracy curves to disk.
-path = os.path.join('..', '..', 'curves', data, model)
-if not os.path.isdir(path):
-    os.makedirs(path)
-
 if train:
     to_write = ['train'] + params
 else:
     to_write = ['test'] + params
 
-to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.pt'
-
-torch.save((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+f = '_'.join([str(x) for x in to_write]) + '.pt'
+torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', data, model)
-if not os.path.isdir(path):
-    os.makedirs(path)
-
 results = [np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
            np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])]
 
@@ -313,8 +310,8 @@ if train:
 else:
     name = 'test.csv'
 
-if not os.path.isfile(os.path.join(path, name)):
-    with open(os.path.join(path, name), 'w') as f:
+if not os.path.isfile(os.path.join(results_path, name)):
+    with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write('random_seed,n_neurons,n_train,' + \
                     'inhib,time,timestep,theta_plus,theta_decay,' + \
@@ -330,7 +327,7 @@ if not os.path.isfile(os.path.join(path, name)):
                     'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
                     'max_proportion_weighting,max_ngram\n')
 
-with open(os.path.join(path, name), 'a') as f:
+with open(os.path.join(results_path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
 
 print()
