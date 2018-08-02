@@ -18,12 +18,9 @@ do
                                 do
                                     for intensity in 63.75
                                     do
-                                        for X_Ae_decay in 0.0 0.5
-                                        do
-                                            sbatch submit.sh $seed $n_neurons $n_train $n_test \
-                                                   $inhib $time $theta_plus $theta_decay \
-                                                   $intensity $X_Ae_decay
-                                        done
+                                        sbatch submit.sh $seed $n_neurons $n_train $n_test \
+                                               $inhib $time $theta_plus $theta_decay $p \
+                                               $intensity
                                     done
                                 done
                             done
