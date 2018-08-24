@@ -219,8 +219,6 @@ for i in range(n_examples):
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
 
-    print(network.layers['Ae'].theta)
-
     retries = 0
     while spikes['Ae'].get('s').sum() < 5 and retries < 3:
         retries += 1
