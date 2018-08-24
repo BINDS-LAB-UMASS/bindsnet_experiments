@@ -15,8 +15,6 @@ inhib=${5:-25.0}
 time=${6:-350}
 theta_plus=${7:-0.05}
 theta_decay=${8:-1e-7}
-intensity=${9:-0.5}
-X_Ae_decay=${10:-0.5}
 
 cd ../../../scripts/breakout/
 source activate py36
@@ -25,10 +23,8 @@ echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $in
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
-							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --X_Ae_decay $X_Ae_decay
+							  --theta_plus $theta_plus --theta_decay $theta_decay
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
-							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --X_Ae_decay $X_Ae_decay
+							  --theta_plus $theta_plus --theta_decay $theta_decay
 exit

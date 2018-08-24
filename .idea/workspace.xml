@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="75a7b355-879e-4290-bb20-de4f53481360" name="Default" comment="">
-      <change afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -54,7 +52,7 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="629">
@@ -75,20 +73,11 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="357">
-              <caret line="21" column="76" selection-start-line="21" selection-start-column="76" selection-end-line="21" selection-end-column="76" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh">
           <provider selected="true" editor-type-id="text-editor">
-            <state>
-              <caret column="19" lean-forward="true" selection-start-column="19" selection-end-column="19" />
+            <state relative-caret-position="272">
+              <caret line="16" column="22" selection-start-line="16" selection-start-column="22" selection-end-line="16" selection-end-column="22" />
             </state>
           </provider>
         </entry>
@@ -180,6 +169,7 @@
       <find>nu_pre</find>
       <find>4</find>
       <find>intensity</find>
+      <find>decay</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -193,9 +183,9 @@
         <option value="$PROJECT_DIR$/../bindsnet/bindsnet/analysis/plotting.py" />
         <option value="$PROJECT_DIR$/scripts/mnist/special_locally_connected.py" />
         <option value="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" />
-        <option value="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" />
         <option value="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh" />
         <option value="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" />
+        <option value="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" />
       </list>
     </option>
   </component>
@@ -436,27 +426,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="306">
-          <caret line="18" column="83" selection-start-line="18" selection-start-column="83" selection-end-line="18" selection-end-column="83" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="357">
-          <caret line="21" column="76" selection-start-line="21" selection-start-column="76" selection-end-line="21" selection-end-column="76" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="19" lean-forward="true" selection-start-column="19" selection-end-column="19" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/mnist/diehl_and_cook_2015.py">
       <provider selected="true" editor-type-id="text-editor">
         <state>
@@ -473,6 +442,27 @@
           <folding>
             <element signature="e#0#9#0" expanded="true" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="306">
+          <caret line="18" column="21" lean-forward="true" selection-start-line="18" selection-start-column="21" selection-end-line="18" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="306">
+          <caret line="18" column="83" selection-start-line="18" selection-start-column="83" selection-end-line="18" selection-end-column="83" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="272">
+          <caret line="16" column="22" selection-start-line="16" selection-start-column="22" selection-end-line="16" selection-end-column="22" />
         </state>
       </provider>
     </entry>
