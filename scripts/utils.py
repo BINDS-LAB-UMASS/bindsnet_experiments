@@ -14,8 +14,11 @@ def print_results(results: Dict[str, list]) -> None:
     """
     print()
     for s in results:
-        print(f'Results for scheme "{s}": {results[s][-1]:.2f} (last), ' \
-              f'{np.mean(results[s]):.2f} (average), {np.max(results[s]):.2f} (best)')
+        last = results[s][-1]
+        mean = np.mean(results[s])
+        best = np.max(results[s])
+
+        print(f'Results for scheme "{s}": {last:.2f} (last), {mean:.2f} (mean), {best:.2f} (best)')
 
 
 def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int, **kwargs) -> Dict[str, list]:
@@ -25,7 +28,7 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
     :param curves: Mapping from name of classification scheme to list of accuracy evaluations.
     :param labels: One-dimensional ``torch.Tensor`` of integer data labels.
     :param n_classes: Number of data categories.
-    :param Dict[str, Any] kwargs: Additional keyword arguments for classification scheme evaluation functions.
+    :param kwargs: Additional keyword arguments for classification scheme evaluation functions.
     :return: Updated accuracy curves.
     """
     for scheme in curves:
@@ -47,6 +50,8 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
             n = kwargs['n']
 
             prediction = ngram(spike_record, ngram_scores, n_classes, n)
+        else:
+            raise NotImplementedError
 
         # Compute accuracy with current classification scheme.
         accuracy = torch.sum(labels.long() == prediction).float() / len(labels)

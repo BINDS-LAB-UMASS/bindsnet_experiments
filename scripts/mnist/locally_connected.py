@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from bindsnet import *
 from time     import time as t
 
+from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
+
 sys.path.append('..')
 
 from utils import *
@@ -78,9 +80,9 @@ else:
 start_intensity = intensity
 
 if kernel_size == 28:
-	conv_size = 1
+    conv_size = 1
 else:
-	conv_size = int((28 - kernel_size) / stride) + 1
+    conv_size = int((28 - kernel_size) / stride) + 1
 
 n_neurons = n_filters * conv_size ** 2
 
@@ -98,8 +100,7 @@ if train:
     input_layer = Input(n=784,
                         traces=True)
 
-    conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size,
-                                   traces=True)
+    conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, traces=True)
 
     w = torch.zeros(input_layer.n, conv_layer.n)
     for f in range(n_filters):
@@ -107,14 +108,11 @@ if train:
             for k in range(kernel_size ** 2):
                 w[locations[k, c], f * (conv_size ** 2) + c] = np.random.rand()
 
-    conv_conn = Connection(input_layer,
-                           conv_layer,
-                           w=w,
-                           update_rule=post_pre,
-                           norm=0.2 * kernel_size ** 2,
-                           nu_pre=1e-4,
-                           nu_post=1e-2,
-                           wmax=1.0)
+    conv_conn = Connection(
+        input_layer, conv_layer, w=w, update_rule=post_pre,
+        norm=0.2 * kernel_size ** 2, nu_pre=1e-4,
+        nu_post=1e-2, wmax=1.0
+    )
 
     w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
     for fltr1 in range(n_filters):
@@ -124,9 +122,7 @@ if train:
                     for j in range(conv_size):
                         w[fltr1, i, j, fltr2, i, j] = -inhib
 
-    recurrent_conn = Connection(conv_layer,
-                                conv_layer,
-                                w=w)
+    recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
     network.add_layer(input_layer, name='X')
     network.add_layer(conv_layer, name='Y')
@@ -134,7 +130,7 @@ if train:
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
     path = os.path.join('..', '..', 'params', data, model)
-    network = load_network(os.path.join(path, model_name + '.p'))
+    network = load_network(os.path.join(path, model_name + '.pt'))
     network.connections[('X', 'Y')].update_rule = None
 
 # Voltage recording for excitatory and inhibitory layers.
@@ -165,7 +161,7 @@ if train:
     ngram_scores = {}
 else:
     path = os.path.join('..', '..', 'params', data, model)
-    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
     assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
 
 # Accuracy curves recording.
@@ -184,6 +180,10 @@ if train:
     print('\nBegin training.\n')
 else:
     print('\nBegin test.\n')
+
+spike_ims = None
+spike_axes = None
+weights_im = None
 
 start = t()
 for i in range(n_examples):
@@ -217,8 +217,8 @@ for i in range(n_examples):
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
-                    network.save(os.path.join(path, model_name + '.p'))
-                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+                    network.save(os.path.join(path, model_name + '.pt'))
+                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
                     p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
@@ -255,20 +255,14 @@ for i in range(n_examples):
     # Optionally plot various simulation information.
     if plot:
         inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
-        _spikes = {'X' : spikes['X'].get('s').view(28 ** 2, time),
-                   'Y' : spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
+        _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
+                   'Y': spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
 
-        if i == 0:
-            spike_ims, spike_axes = plot_spikes(spikes=_spikes)
-            weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
-                                                        conv_size, locations, 28,
-                                                        wmax=conv_conn.wmax)
-        else:
-            spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_locally_connected_weights(conv_conn.w, n_filters, kernel_size,
-                                                        conv_size, locations, 28,
-                                                        im=weights_im)
-        
+        spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
+        weights_im = plot_locally_connected_weights(
+            conv_conn.w, n_filters, kernel_size, conv_size, locations, 28, im=weights_im
+        )
+
         plt.pause(1e-8)
     
     network.reset_()  # Reset state variables.

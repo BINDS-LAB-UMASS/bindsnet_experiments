@@ -3,23 +3,22 @@ import sys
 import torch
 import argparse
 import numpy as np
-import pickle as p
 import matplotlib.pyplot as plt
+
+from time import time as t
 
 from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network
 from bindsnet.models import DiehlAndCook2015
 from bindsnet.network.monitors import Monitor
 from bindsnet.evaluation import update_ngram_scores, assign_labels
-from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assignments, plot_weights, plot_input
-
-from time import time as t
-
 from bindsnet.utils import get_square_weights, get_square_assignments
+from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assignments, plot_weights, plot_input
 
 sys.path.append('..')
 
-from utils import *
+from utils import update_curves, print_results
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
@@ -60,7 +59,8 @@ gpu = args.gpu
 
 args = vars(args)
 
-print(); print('Command-line argument values:')
+print()
+print('Command-line argument values:')
 for key, value in args.items():
     print('-', key, ':', value)
 
@@ -70,6 +70,7 @@ model = 'diehl_and_cook_2015'
 data = 'breakout'
 
 top_level = os.path.join('..', '..')
+data_path = os.path.join(top_level, 'data', 'Breakout')
 params_path = os.path.join(top_level, 'params', data, model)
 curves_path = os.path.join(top_level, 'curves', data, model)
 results_path = os.path.join(top_level, 'results', data, model)
@@ -85,13 +86,12 @@ params = [
     seed, n_neurons, n_train, inhib, time, dt, theta_plus, theta_decay, intensity, progress_interval, update_interval
 ]
 
-model_name = '_'.join([str(x) for x in params])
+test_params = [
+    seed, n_neurons, n_train, n_test, inhib, time, dt, theta_plus,
+    theta_decay, intensity, progress_interval, update_interval
+]
 
-if not train:
-    test_params = [
-        seed, n_neurons, n_train, n_test, inhib, time, dt, theta_plus,
-        theta_decay, intensity, progress_interval, update_interval
-    ]
+model_name = '_'.join([str(x) for x in params])
 
 np.random.seed(seed)
 
@@ -101,11 +101,7 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
-if train:
-    n_examples = n_train
-else:
-    n_examples = n_test
-
+n_examples = n_train if train else n_test
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 n_classes = 4
@@ -115,15 +111,13 @@ if train:
     network = DiehlAndCook2015(
         n_inpt=6400, n_neurons=n_neurons, exc=25.0, inh=inhib, dt=dt, norm=64, theta_plus=theta_plus
     )
-
 else:
-    network = load_network(os.path.join(params_path, model_name + '.p'))
+    network = load_network(os.path.join(params_path, model_name + '.pt'))
     network.connections[('X', 'Ae')].update_rule = None
 
 # Load Breakout data.
-path = os.path.join('..', '..', 'data', 'Breakout')
-images, labels = torch.load(os.path.join(path, 'frames.pt')), torch.load(os.path.join(path, 'labels.pt'))
-
+images = torch.load(os.path.join(data_path, 'frames.pt'))
+labels = torch.load(os.path.join(data_path, 'labels.pt'))
 images = images.view(-1, 6400)
 
 # Record spikes during the simulation.
@@ -136,8 +130,8 @@ if train:
     rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
     ngram_scores = {}
 else:
-    path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.p')
-    assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
+    path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
+    assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
 curves = {'all': [], 'proportion': [], 'ngram': []}
@@ -168,7 +162,8 @@ perf_ax = None
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
-        print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
+        elapsed = t() - start
+        print(f'Progress: {i} / {n_examples} ({elapsed:.4f} seconds)')
         start = t()
 
     if i % update_interval == 0 and i > 0:
@@ -178,9 +173,9 @@ for i in range(n_examples):
             current_labels = labels[i - update_interval:i]
 
         # Update and print accuracy evaluations.
-        curves = update_curves(curves, current_labels, n_classes, spike_record=spike_record,
-                               assignments=assignments, proportions=proportions,
-                               ngram_scores=ngram_scores, n=2)
+        curves = update_curves(
+            curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
+            proportions=proportions, ngram_scores=ngram_scores, n=2)
         print_results(curves)
 
         # Save accuracy curves to disk.
@@ -259,9 +254,10 @@ else:
     current_labels = labels[i - update_interval:i]
 
 # Update and print accuracy evaluations.
-curves = update_curves(curves, current_labels, n_classes, spike_record=spike_record,
-                       assignments=assignments, proportions=proportions,
-                       ngram_scores=ngram_scores, n=2)
+curves = update_curves(
+    curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
+    proportions=proportions, ngram_scores=ngram_scores, n=2
+)
 print_results(curves)
 
 if train:
@@ -275,45 +271,28 @@ if train:
 
         best_accuracy = max([x[-1] for x in curves.values()])
 
-if train:
     print('\nTraining complete.\n')
 else:
     print('\nTest complete.\n')
 
 print('Average accuracies:\n')
 for scheme in curves.keys():
-    print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
+    print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
+
+to_write = ['train'] + params if train else ['test'] + params
+to_write = [str(x) for x in to_write]
+f = '_'.join(to_write) + '.pt'
 
 # Save accuracy curves to disk.
-path = os.path.join('..', '..', 'curves', data, model)
-if not os.path.isdir(path):
-    os.makedirs(path)
-
-if train:
-    to_write = ['train'] + params
-else:
-    to_write = ['test'] + params
-
-to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.p'
-
-p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 # Save results to disk.
-path = os.path.join('..', '..', 'results', data, model)
-if not os.path.isdir(path):
-    os.makedirs(path)
-
 results = [
     np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
     np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
 ]
 
-if train:
-    to_write = params + results
-else:
-    to_write = test_params + results
-
+to_write = params + results if train else test_params + results
 to_write = [str(x) for x in to_write]
 
 if train:
@@ -321,24 +300,22 @@ if train:
 else:
     name = 'test.csv'
 
-if not os.path.isfile(os.path.join(path, name)):
-    with open(os.path.join(path, name), 'w') as f:
+if not os.path.isfile(os.path.join(results_path, name)):
+    with open(os.path.join(results_path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,'
-                    'inhib,time,timestep,theta_plus,theta_decay,'
-                    'intensity,progress_interval,update_interval,'
-                    'X_Ae_decay,mean_all_activity,'
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,'
-                    'max_proportion_weighting,max_ngram\n')
+            f.write(
+                'random_seed,n_neurons,n_train,inhib,time,timestep,theta_plus,theta_decay,intensity,progress_interval,'
+                'update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,max_all_activity,'
+                'max_proportion_weighting,max_ngram\n'
+            )
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,'
-                    'inhib,time,timestep,theta_plus,theta_decay,'
-                    'intensity,progress_interval,update_interval,'
-                    'X_Ae_decay,mean_all_activity,'
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,'
-                    'max_proportion_weighting,max_ngram\n')
+            f.write(
+                'random_seed,n_neurons,n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,intensity,'
+                'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
+                'max_all_activity,max_proportion_weighting,max_ngram\n'
+            )
 
-with open(os.path.join(path, name), 'a') as f:
+with open(os.path.join(results_path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
 
 print()
