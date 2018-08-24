@@ -2,9 +2,10 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="75a7b355-879e-4290-bb20-de4f53481360" name="Default" comment="">
-      <change afterPath="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/mnist/noisy_dac.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mnist/noisy_dac.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -26,10 +27,12 @@
       <usages-collector id="statistics.file.extensions.open">
         <counts>
           <entry key="py" value="12" />
+          <entry key="sh" value="3" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
+          <entry key="Bash" value="3" />
           <entry key="Python" value="12" />
         </counts>
       </usages-collector>
@@ -37,10 +40,12 @@
         <counts>
           <entry key="py" value="2116" />
           <entry key="rst" value="1" />
+          <entry key="sh" value="129" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
+          <entry key="Bash" value="129" />
           <entry key="Python" value="2116" />
           <entry key="ReST" value="1" />
         </counts>
@@ -49,23 +54,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/scripts/mnist/special_locally_connected.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="442">
-              <caret line="44" column="29" selection-start-line="44" selection-start-column="29" selection-end-line="44" selection-end-column="29" />
-              <folding>
-                <element signature="e#0#9#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="363">
-              <caret line="31" column="59" selection-start-line="31" selection-start-column="59" selection-end-line="31" selection-end-column="59" />
+            <state relative-caret-position="629">
+              <caret line="49" column="16" lean-forward="true" selection-start-line="49" selection-start-column="16" selection-end-line="49" selection-end-column="16" />
               <folding>
                 <element signature="e#0#9#0" expanded="true" />
               </folding>
@@ -74,25 +67,28 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/scripts/mnist/stride_conv.py">
+        <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="34">
-              <caret line="10" column="5" selection-start-line="10" selection-start-column="5" selection-end-line="10" selection-end-column="5" />
-              <folding>
-                <element signature="e#0#9#0" expanded="true" />
-              </folding>
+            <state relative-caret-position="306">
+              <caret line="18" column="83" selection-start-line="18" selection-start-column="83" selection-end-line="18" selection-end-column="83" />
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/scripts/mnist/locally_connected.py">
+        <entry file="file://$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="340">
-              <caret line="28" column="26" selection-start-line="28" selection-start-column="26" selection-end-line="28" selection-end-column="26" />
-              <folding>
-                <element signature="e#0#9#0" expanded="true" />
-              </folding>
+            <state relative-caret-position="357">
+              <caret line="21" column="76" selection-start-line="21" selection-start-column="76" selection-end-line="21" selection-end-column="76" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh">
+          <provider selected="true" editor-type-id="text-editor">
+            <state>
+              <caret column="19" lean-forward="true" selection-start-column="19" selection-end-column="19" />
             </state>
           </provider>
         </entry>
@@ -197,6 +193,9 @@
         <option value="$PROJECT_DIR$/../bindsnet/bindsnet/analysis/plotting.py" />
         <option value="$PROJECT_DIR$/scripts/mnist/special_locally_connected.py" />
         <option value="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" />
+        <option value="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" />
+        <option value="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh" />
+        <option value="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" />
       </list>
     </option>
   </component>
@@ -218,6 +217,37 @@
             <path>
               <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
               <item name="experiments" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+              <item name="breakout" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+              <item name="breakout" type="462c0819:PsiDirectoryNode" />
+              <item name="diehl_and_cook_2015" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+              <item name="mnist" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+              <item name="mnist" type="462c0819:PsiDirectoryNode" />
+              <item name="diehl_and_cook_2015" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
@@ -247,6 +277,14 @@
         <option name="myModuleName" value="experiments" />
       </console-settings>
     </option>
+  </component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015" />
+    </key>
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015" />
+    </key>
   </component>
   <component name="RunDashboard">
     <option name="ruleStates">
@@ -354,15 +392,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/scripts/mnist/diehl_and_cook_2015.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#9#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/mnist/two_level_locally_connected.py">
       <provider selected="true" editor-type-id="text-editor">
         <state>
@@ -407,10 +436,40 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/grid_search.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="306">
+          <caret line="18" column="83" selection-start-line="18" selection-start-column="83" selection-end-line="18" selection-end-column="83" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="357">
+          <caret line="21" column="76" selection-start-line="21" selection-start-column="76" selection-end-line="21" selection-end-column="76" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="19" lean-forward="true" selection-start-column="19" selection-end-column="19" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/scripts/mnist/diehl_and_cook_2015.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <folding>
+            <element signature="e#0#9#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="363">
-          <caret line="31" column="59" selection-start-line="31" selection-start-column="59" selection-end-line="31" selection-end-column="59" />
+        <state relative-caret-position="629">
+          <caret line="49" column="16" lean-forward="true" selection-start-line="49" selection-start-column="16" selection-end-line="49" selection-end-column="16" />
           <folding>
             <element signature="e#0#9#0" expanded="true" />
           </folding>
