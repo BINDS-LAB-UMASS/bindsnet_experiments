@@ -8,5 +8,6 @@ bash/output/
 credentials.yml
 
 .idea/
+.idea/workspace.xml
 
 scripts/__pycache__/

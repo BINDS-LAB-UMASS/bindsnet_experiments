@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="75a7b355-879e-4290-bb20-de4f53481360" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/breakout/diehl_and_cook_2015/submit.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/mnist/diehl_and_cook_2015/submit.sh" afterDir="false" />
-    </list>
+    <list default="true" id="75a7b355-879e-4290-bb20-de4f53481360" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
