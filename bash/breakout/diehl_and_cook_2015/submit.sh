@@ -9,8 +9,8 @@
 
 seed=${1:-0}
 n_neurons=${2:-100}
-n_train=${3:-60000}
-n_test=${4:-10000}
+n_train=${3:-6750}
+n_test=${4:-6750}
 inhib=${5:-25.0}
 time=${6:-350}
 theta_plus=${7:-0.05}
