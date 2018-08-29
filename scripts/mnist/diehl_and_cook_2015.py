@@ -17,8 +17,6 @@ from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.evaluation import ngram, all_activity, proportion_weighting, assign_labels, update_ngram_scores
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
-from scripts.utils import print_results, update_curves
-
 sys.path.append('..')
 
 from utils import *

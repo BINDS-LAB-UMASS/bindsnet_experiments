@@ -17,7 +17,7 @@ from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assig
 
 sys.path.append('..')
 
-from utils import update_curves, print_results
+from utils import *
 
 
 parser = argparse.ArgumentParser()
@@ -135,6 +135,7 @@ else:
 
 # Sequence of accuracy estimates.
 curves = {'all': [], 'proportion': [], 'ngram': []}
+predictions = {'all': torch.LongTensor(), 'proportion': torch.LongTensor(), 'ngram': torch.LongTensor()}
 
 if train:
     best_accuracy = 0
@@ -173,17 +174,17 @@ for i in range(n_examples):
             current_labels = labels[i - update_interval:i]
 
         # Update and print accuracy evaluations.
-        curves = update_curves(
+        curves, preds = update_curves(
             curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-            proportions=proportions, ngram_scores=ngram_scores, n=2)
+            proportions=proportions, ngram_scores=ngram_scores, n=2
+        )
         print_results(curves)
 
-        # Save accuracy curves to disk.
-        if train:
-            to_write = ['train'] + params
-        else:
-            to_write = ['test'] + params
+        for scheme in preds:
+            predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
+        # Save accuracy curves to disk.
+        to_write = ['train'] + params if train else ['test'] + params
         f = '_'.join([str(x) for x in to_write]) + '.pt'
         torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
@@ -254,11 +255,14 @@ else:
     current_labels = labels[i - update_interval:i]
 
 # Update and print accuracy evaluations.
-curves = update_curves(
+curves, preds = update_curves(
     curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
     proportions=proportions, ngram_scores=ngram_scores, n=2
 )
 print_results(curves)
+
+for scheme in preds:
+    predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
 if train:
     if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -279,11 +283,9 @@ print('Average accuracies:\n')
 for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
-to_write = ['train'] + params if train else ['test'] + params
-to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.pt'
-
 # Save accuracy curves to disk.
+to_write = ['train'] + params if train else ['test'] + params
+f = '_'.join([str(x) for x in to_write]) + '.pt'
 torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 # Save results to disk.

@@ -29,8 +29,9 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
     :param labels: One-dimensional ``torch.Tensor`` of integer data labels.
     :param n_classes: Number of data categories.
     :param kwargs: Additional keyword arguments for classification scheme evaluation functions.
-    :return: Updated accuracy curves.
+    :return: Updated accuracy curves and predictions.
     """
+    predictions = {}
     for scheme in curves:
         # Branch based on name of classification scheme
         if scheme == 'all':
@@ -54,10 +55,11 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
             raise NotImplementedError
 
         # Compute accuracy with current classification scheme.
+        predictions[scheme] = prediction
         accuracy = torch.sum(labels.long() == prediction).float() / len(labels)
         curves[scheme].append(100 * accuracy)
 
-    return curves
+    return curves, predictions
 
 
 def bit_flip(x: torch.Tensor, p: float) -> torch.Tensor:

@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
+from sklearn.metrics import confusion_matrix
 
 from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network
@@ -17,16 +18,16 @@ from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assig
 
 sys.path.append('..')
 
-from utils import update_curves, print_results
+from utils import *
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_neurons', type=int, default=100)
-parser.add_argument('--n_train', type=int, default=6750)
-parser.add_argument('--n_test', type=int, default=6750)
+parser.add_argument('--n_train', type=int, default=5480)
+parser.add_argument('--n_test', type=int, default=1370)
 parser.add_argument('--inhib', type=float, default=100.0)
-parser.add_argument('--time', type=int, default=350)
+parser.add_argument('--time', type=int, default=300)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.5)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
@@ -74,8 +75,9 @@ data_path = os.path.join(top_level, 'data', 'Breakout')
 params_path = os.path.join(top_level, 'params', data, model)
 curves_path = os.path.join(top_level, 'curves', data, model)
 results_path = os.path.join(top_level, 'results', data, model)
+confusion_path = os.path.join(top_level, 'confusion', data, model)
 
-for path in [params_path, curves_path, results_path]:
+for path in [params_path, curves_path, results_path, confusion_path]:
     if not os.path.isdir(path):
         os.makedirs(path)
 
@@ -118,7 +120,15 @@ else:
 # Load Breakout data.
 images = torch.load(os.path.join(data_path, 'frames.pt'))
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
-images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)
+images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
+images = images[torch.randperm(images.size(0))]  # Randomly permute the data.
+
+if train:
+    images = images[:n_train]
+    labels = labels[:n_train]
+else:
+    images = images[-n_test:]
+    labels = labels[-n_test:]
 
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
@@ -135,6 +145,7 @@ else:
 
 # Sequence of accuracy estimates.
 curves = {'all': [], 'proportion': [], 'ngram': []}
+predictions = {'all': torch.LongTensor(), 'proportion': torch.LongTensor(), 'ngram': torch.LongTensor()}
 
 if train:
     best_accuracy = 0
@@ -159,6 +170,7 @@ weights_im = None
 assigns_im = None
 perf_ax = None
 
+
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
@@ -173,17 +185,17 @@ for i in range(n_examples):
             current_labels = labels[i - update_interval:i]
 
         # Update and print accuracy evaluations.
-        curves = update_curves(
+        curves, preds = update_curves(
             curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-            proportions=proportions, ngram_scores=ngram_scores, n=2)
+            proportions=proportions, ngram_scores=ngram_scores, n=2
+        )
         print_results(curves)
 
-        # Save accuracy curves to disk.
-        if train:
-            to_write = ['train'] + params
-        else:
-            to_write = ['test'] + params
+        for scheme in preds:
+            predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
+        # Save accuracy curves to disk.
+        to_write = ['train'] + params if train else ['test'] + params
         f = '_'.join([str(x) for x in to_write]) + '.pt'
         torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
@@ -254,11 +266,14 @@ else:
     current_labels = labels[i - update_interval:i]
 
 # Update and print accuracy evaluations.
-curves = update_curves(
+curves, preds = update_curves(
     curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
     proportions=proportions, ngram_scores=ngram_scores, n=2
 )
 print_results(curves)
+
+for scheme in preds:
+    predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
 if train:
     if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -279,11 +294,9 @@ print('Average accuracies:\n')
 for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
-to_write = ['train'] + params if train else ['test'] + params
-to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.pt'
-
 # Save accuracy curves to disk.
+to_write = ['train'] + params if train else ['test'] + test_params
+f = '_'.join([str(x) for x in to_write]) + '.pt'
 torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 # Save results to disk.
@@ -295,10 +308,7 @@ results = [
 to_write = params + results if train else test_params + results
 to_write = [str(x) for x in to_write]
 
-if train:
-    name = 'train.csv'
-else:
-    name = 'test.csv'
+name = 'train.csv' if train else 'test.csv'
 
 if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
@@ -317,5 +327,14 @@ if not os.path.isfile(os.path.join(results_path, name)):
 
 with open(os.path.join(results_path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
+
+# Compute confusion matrices and save them to disk.
+confusions = {}
+for scheme in predictions:
+    confusions[scheme] = confusion_matrix(labels, predictions[scheme])
+
+to_write = ['train'] + params if train else ['test'] + test_params
+f = '_'.join([str(x) for x in to_write]) + '.pt'
+torch.save(confusions, os.path.join(confusion_path, f))
 
 print()
