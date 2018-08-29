@@ -2,13 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="75a7b355-879e-4290-bb20-de4f53481360" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/experiments.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/experiments.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bash/breakout/crop/grid_search.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/breakout/crop/grid_search.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bash/breakout/crop/submit.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bash/breakout/crop/submit.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/breakout/crop.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/breakout/crop.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/mnist/diehl_and_cook_2015.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mnist/diehl_and_cook_2015.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/utils.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -32,26 +28,26 @@
       <usages-collector id="statistics.file.extensions.open">
         <counts>
           <entry key="py" value="18" />
-          <entry key="sh" value="3" />
+          <entry key="sh" value="5" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
-          <entry key="Bash" value="3" />
+          <entry key="Bash" value="5" />
           <entry key="Python" value="18" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="py" value="3473" />
+          <entry key="py" value="3482" />
           <entry key="rst" value="1" />
-          <entry key="sh" value="129" />
+          <entry key="sh" value="145" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Bash" value="129" />
-          <entry key="Python" value="3473" />
+          <entry key="Bash" value="145" />
+          <entry key="Python" value="3482" />
           <entry key="ReST" value="1" />
         </counts>
       </usages-collector>
@@ -94,8 +90,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/scripts/breakout/crop.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="826">
-              <caret line="340" lean-forward="true" selection-start-line="340" selection-end-line="340" />
+            <state relative-caret-position="401">
+              <caret line="24" column="50" lean-forward="true" selection-start-line="24" selection-start-column="50" selection-end-line="24" selection-end-column="50" />
               <folding>
                 <element signature="e#0#9#0" expanded="true" />
               </folding>
@@ -104,13 +100,19 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py">
+        <entry file="file://$PROJECT_DIR$/bash/breakout/crop/grid_search.sh">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="43">
-              <caret line="20" selection-start-line="20" selection-end-line="20" />
-              <folding>
-                <element signature="e#0#9#0" expanded="true" />
-              </folding>
+            <state relative-caret-position="255">
+              <caret line="15" column="26" selection-start-line="15" selection-start-column="26" selection-end-line="15" selection-end-column="26" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/bash/breakout/crop/submit.sh">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="306">
+              <caret line="18" column="16" selection-start-line="18" selection-start-column="16" selection-end-line="18" selection-end-column="16" />
             </state>
           </provider>
         </entry>
@@ -169,6 +171,8 @@
         <option value="$PROJECT_DIR$/scripts/utils.py" />
         <option value="$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py" />
         <option value="$PROJECT_DIR$/scripts/breakout/crop.py" />
+        <option value="$PROJECT_DIR$/bash/breakout/crop/grid_search.sh" />
+        <option value="$PROJECT_DIR$/bash/breakout/crop/submit.sh" />
       </list>
     </option>
   </component>
@@ -190,6 +194,17 @@
             <path>
               <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
               <item name="experiments" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
+              <item name="experiments" type="462c0819:PsiDirectoryNode" />
+              <item name="bash" type="462c0819:PsiDirectoryNode" />
+              <item name="breakout" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="experiments" type="b2602c69:ProjectViewProjectNode" />
@@ -397,6 +412,13 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/crop/grid_search.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="255">
+          <caret line="15" column="26" selection-start-line="15" selection-start-column="26" selection-end-line="15" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/breakout/diehl_and_cook_2015.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="43">
@@ -407,10 +429,17 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/bash/breakout/crop/submit.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="306">
+          <caret line="18" column="16" selection-start-line="18" selection-start-column="16" selection-end-line="18" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/breakout/crop.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="826">
-          <caret line="340" lean-forward="true" selection-start-line="340" selection-end-line="340" />
+        <state relative-caret-position="401">
+          <caret line="24" column="50" lean-forward="true" selection-start-line="24" selection-start-column="50" selection-end-line="24" selection-end-column="50" />
           <folding>
             <element signature="e#0#9#0" expanded="true" />
           </folding>

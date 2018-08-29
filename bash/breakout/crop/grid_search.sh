@@ -4,9 +4,9 @@ for seed in 0
 do
     for n_neurons in 100 200 300
     do 
-        for n_train in 6750
+        for n_train in 5500
         do
-            for n_test in 6750
+            for n_test in 1300
             do
                 for inhib in 100
                 do
