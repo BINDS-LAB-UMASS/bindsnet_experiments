@@ -121,7 +121,11 @@ else:
 images = torch.load(os.path.join(data_path, 'frames.pt'))
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
 images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
-images = images[torch.randperm(images.size(0))]  # Randomly permute the data.
+
+# Randomly permute the data.
+permutation = torch.randperm(images.size(0))
+images = images[permutation]
+labels = labels[permutation]
 
 if train:
     images = images[:n_train]
