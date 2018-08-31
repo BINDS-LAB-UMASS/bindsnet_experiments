@@ -2,17 +2,17 @@
 
 for seed in 0
 do
-    for n_neurons in 100 200 300
+    for n_neurons in 100 200 300 400 500
     do 
-        for n_train in 5500
+        for n_train in 10000 20000 30000 40000 50000
         do
             for n_test in 1300
             do
                 for inhib in 100
                 do
-                    for time in 50 100 150 250
+                    for time in 250
                     do
-                        for theta_plus in 0.05 0.25 0.625 1.0
+                        for theta_plus in 0.05
                         do
                             for theta_decay in 1e-7 5e-6 1e-6
                             do
