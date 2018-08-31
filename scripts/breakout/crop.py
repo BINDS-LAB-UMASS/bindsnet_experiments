@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
+from bindsnet.learning import NoOp
 from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network
 from bindsnet.models import DiehlAndCook2015
@@ -115,7 +116,7 @@ if train:
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
-    network.connections[('X', 'Ae')].update_rule = None
+    network.connections[('X', 'Ae')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
 
 # Load Breakout data.
 images = torch.load(os.path.join(data_path, 'frames.pt'))
@@ -128,11 +129,11 @@ images = images[permutation]
 labels = labels[permutation]
 
 if train:
-    images = images[:n_train]
-    labels = labels[:n_train]
+    images = images[:min(n_train, 5500)]
+    labels = labels[:min(n_train, 5500)]
 else:
-    images = images[-n_test:]
-    labels = labels[-n_test:]
+    images = images[-min(n_test, 1300):]
+    labels = labels[-min(n_test, 1300):]
 
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
@@ -185,7 +186,7 @@ for i in range(n_examples):
         if i % len(labels) == 0:
             current_labels = labels[-update_interval:]
         else:
-            current_labels = labels[i - update_interval:i]
+            current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
 
         # Update and print accuracy evaluations.
         curves, preds = update_curves(
@@ -222,7 +223,7 @@ for i in range(n_examples):
         print()
 
     # Get next input sample.
-    image = images[i]
+    image = images[i % len(images)]
     sample = bernoulli(datum=image, time=time)
     inpts = {'X': sample}
 
@@ -242,7 +243,7 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = images[i].view(50, 72)
+        inpt = images[i % len(images)].view(50, 72)
         reconstruction = inpts['X'].view(time, 50*72).sum(0).view(50, 72)
         _spikes = {layer: spikes[layer].get('s') for layer in spikes}
         input_exc_weights = network.connections[('X', 'Ae')].w
@@ -266,7 +267,7 @@ i += 1
 if i % len(labels) == 0:
     current_labels = labels[-update_interval:]
 else:
-    current_labels = labels[i - update_interval:i]
+    current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
 
 # Update and print accuracy evaluations.
 curves, preds = update_curves(
@@ -330,6 +331,12 @@ if not os.path.isfile(os.path.join(results_path, name)):
 
 with open(os.path.join(results_path, name), 'a') as f:
     f.write(','.join(to_write) + '\n')
+
+while labels.numel() < n_examples:
+    if 2 * labels.numel() > n_examples:
+        labels = torch.cat([labels, labels[:n_examples - labels.numel()]])
+    else:
+        labels = torch.cat([labels, labels])
 
 # Compute confusion matrices and save them to disk.
 confusions = {}
