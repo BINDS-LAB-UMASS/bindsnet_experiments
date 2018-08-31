@@ -174,7 +174,6 @@ weights_im = None
 assigns_im = None
 perf_ax = None
 
-
 start = t()
 for i in range(n_examples):
     if i % progress_interval == 0:
