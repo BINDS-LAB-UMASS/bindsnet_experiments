@@ -136,6 +136,11 @@ for i in range(4):
 images = _images
 labels = _labels
 
+# Randomly permute the data.
+permutation = torch.randperm(images.size(0))
+images = images[permutation]
+labels = labels[permutation]
+
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
 
@@ -195,6 +200,8 @@ for i in range(n_examples):
             proportions=proportions, ngram_scores=ngram_scores, n=2
         )
         print_results(curves)
+
+        print(current_labels, preds)
 
         for scheme in preds:
             predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
