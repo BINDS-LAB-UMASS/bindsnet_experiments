@@ -108,6 +108,7 @@ n_examples = n_train if train else n_test
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 n_classes = 4
+per_class = int(n_examples / n_classes)
 
 # Build network.
 if train:
@@ -123,10 +124,17 @@ images = torch.load(os.path.join(data_path, 'frames.pt'))
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
 images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
-# Randomly sample n_examples examples.
-indices = np.random.choice(np.arange(images.size(0)), size=n_examples, replace=True)
-images = images[indices]
-labels = labels[indices]
+# Randomly sample n_examples examples, with n_examples / 4 per class.
+_images = torch.FloatTensor()
+_labels = torch.LongTensor()
+for i in range(4):
+    indices = np.where(labels == i)[0]
+    indices = np.random.choice(indices, size=per_class, replace=True)
+    _images = torch.cat([_images, images[indices]])
+    _labels = torch.cat([_labels, labels[indices]])
+
+images = _images
+labels = _labels
 
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
