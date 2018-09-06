@@ -24,9 +24,9 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--kernel_size', type=int, nargs='+', default=20)
-parser.add_argument('--stride', type=int, nargs='+', default=20)
-parser.add_argument('--n_filters', type=int, default=25)
+parser.add_argument('--kernel_size', type=int, nargs='+', default=(25, 36))
+parser.add_argument('--stride', type=int, nargs='+', default=(25, 36))
+parser.add_argument('--n_filters', type=int, default=16)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--inhib', type=float, default=100.0)
@@ -117,21 +117,24 @@ per_class = int(n_examples / n_classes)
 # Build network.
 if train:
     network = LocallyConnectedNetwork(
-        n_inpt=80*80, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
+        n_inpt=50*72, input_shape=[50, 72], kernel_size=kernel_size, stride=stride, n_filters=n_filters,
         inh=inhib, dt=dt, norm=0.2, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
     network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
 
+for l in network.layers:
+    print(f'Layer {l} has {network.layers[l].n} neurons')
+
 conv_size = network.connections[('X', 'Y')].conv_size
 locations = network.connections[('X', 'Y')].locations
-n_neurons = n_filters * conv_size ** 2
+n_neurons = n_filters * np.prod(conv_size)
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 80 ** 2)
+images = torch.load(os.path.join(data_path, 'frames.pt'))
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
-# images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
+images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
 _images = torch.FloatTensor()
@@ -258,18 +261,16 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = images[i % len(images)].view(80, 80)
-        reconstruction = inpts['X'].view(time, 80 ** 2).sum(0).view(80, 80)
+        inpt = images[i % len(images)].view(50, 72)
+        reconstruction = inpts['X'].view(time, 50 * 72).sum(0).view(50, 72)
         _spikes = {layer: spikes[layer].get('s') for layer in spikes}
         input_exc_weights = network.connections[('X', 'Y')].w
-        # square_assignments = get_square_assignments(assignments, n_sqrt)
 
         inpt_axes, inpt_ims = plot_input(inpt, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
         spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_locally_connected_weights(
-            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, 80, im=weights_im
+            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, (50, 72), im=weights_im
         )
-        # assigns_im = plot_assignments(square_assignments, im=assigns_im)
         perf_ax = plot_performance(curves, ax=perf_ax)
 
         plt.pause(1e-8)
