@@ -1,14 +1,20 @@
 import os
 import sys
 import torch
-import numpy             as np
+import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 
-from bindsnet import *
-from time     import time as t
+from time import time as t
 
-from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
+from bindsnet.learning import NoOp
+from bindsnet.datasets import MNIST
+from bindsnet.encoding import poisson
+from bindsnet.network import load_network
+from bindsnet.network.monitors import Monitor
+from bindsnet.models import LocallyConnectedNetwork
+from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_weights
+from bindsnet.evaluation import all_activity, proportion_weighting, ngram, assign_labels, update_ngram_scores
 
 sys.path.append('..')
 
@@ -37,12 +43,25 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
 
-args = vars(parser.parse_args())
-locals().update(args)
+args = parser.parse_args()
 
-print(); print('Command-line argument values:')
-for key, value in args.items():
-    print('-', key, ':', value)
+seed = args.seed
+n_train = args.n_train
+n_test = args.n_test
+inhib = args.inhib
+kernel_size = args.kernel_size
+stride = args.stride
+n_filters = args.n_filters
+time = args.time
+dt = args.dt
+theta_plus = args.theta_plus
+theta_decay = args.theta_decay
+intensity = args.intensity
+progress_interval = args.progress_interval
+update_interval = args.update_interval
+train = args.train
+plot = args.plot
+gpu = args.gpu
 
 print()
 
@@ -52,17 +71,18 @@ data = 'mnist'
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
-params = [seed, kernel_size, stride, n_filters, n_train,
-          inhib, time, dt, theta_plus, theta_decay,
-          intensity, progress_interval, update_interval]
+params = [
+    seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
+    theta_plus, theta_decay, intensity, progress_interval, update_interval
+]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
-    test_params = [seed, kernel_size, stride, n_filters, n_train,
-                   n_test, inhib, time, dt, theta_plus,
-                   theta_decay, intensity, progress_interval,
-                   update_interval]
+    test_params = [
+        seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time, dt,
+        theta_plus, theta_decay, intensity, progress_interval, update_interval
+    ]
 
 np.random.seed(seed)
 
@@ -96,48 +116,20 @@ locations = locations.view(kernel_size ** 2, conv_size ** 2)
 
 # Build network.
 if train:
-    network = Network()
-    input_layer = Input(n=784,
-                        traces=True)
-
-    conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, traces=True)
-
-    w = torch.zeros(input_layer.n, conv_layer.n)
-    for f in range(n_filters):
-        for c in range(conv_size ** 2):
-            for k in range(kernel_size ** 2):
-                w[locations[k, c], f * (conv_size ** 2) + c] = np.random.rand()
-
-    conv_conn = Connection(
-        input_layer, conv_layer, w=w, update_rule=post_pre,
-        norm=0.2 * kernel_size ** 2, nu_pre=1e-4,
-        nu_post=1e-2, wmax=1.0
+    network = LocallyConnectedNetwork(
+        n_inpt=784, kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib, dt=dt, nu_pre=1e-4,
+        nu_post=1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=0.2
     )
-
-    w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
-    for fltr1 in range(n_filters):
-        for fltr2 in range(n_filters):
-            if fltr1 != fltr2:
-                for i in range(conv_size):
-                    for j in range(conv_size):
-                        w[fltr1, i, j, fltr2, i, j] = -inhib
-
-    recurrent_conn = Connection(conv_layer, conv_layer, w=w)
-
-    network.add_layer(input_layer, name='X')
-    network.add_layer(conv_layer, name='Y')
-    network.add_connection(conv_conn, source='X', target='Y')
-    network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
     path = os.path.join('..', '..', 'params', data, model)
     network = load_network(os.path.join(path, model_name + '.pt'))
-    network.connections[('X', 'Y')].update_rule = None
+    network.connections[('X', 'Y')].update_rule = NoOp(
+        connection=network.connections[('X', 'Y')], nu=network.connections[('X', 'Y')].nu
+    )
 
 # Voltage recording for excitatory and inhibitory layers.
 voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
 network.add_monitor(voltage_monitor, name='output_voltage')
-
-mask = network.connections[('X', 'Y')].w == 0
 
 # Load MNIST data.
 dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
@@ -234,11 +226,10 @@ for i in range(n_examples):
     # Get next input sample.
     image = images[i].view(-1)
     sample = poisson(datum=image, time=time)
-    inpts = {'X' : sample}
+    inpts = {'X': sample}
 
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
-    network.connections[('X', 'Y')].w.masked_fill_(mask, 0)
 
     retries = 0
     while spikes['Y'].get('s').sum() < 5 and retries < 3:
@@ -247,7 +238,6 @@ for i in range(n_examples):
         sample = poisson(datum=image, time=time)
         inpts = {'X' : sample}
         network.run(inpts=inpts, time=time)
-        network.connections[('X', 'Y')].w.masked_fill_(mask, 0)
 
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Y'].get('s').t()
@@ -260,7 +250,7 @@ for i in range(n_examples):
 
         spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_locally_connected_weights(
-            conv_conn.w, n_filters, kernel_size, conv_size, locations, 28, im=weights_im
+            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, 28, im=weights_im
         )
 
         plt.pause(1e-8)
@@ -331,12 +321,10 @@ path = os.path.join('..', '..', 'results', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
-results = [np.mean(curves['all']),
-           np.mean(curves['proportion']),
-           np.mean(curves['ngram']),
-           np.max(curves['all']),
-           np.max(curves['proportion']),
-           np.max(curves['ngram'])]
+results = [
+    np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
+    np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
+]
 
 if train:
     to_write = params + results
@@ -353,18 +341,18 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,kernel_size,stride,n_filters,' + \
-                    'n_train,inhib,time,timestep,' + \
-                    'theta_plus,theta_decay,intensity,' + \
-                    'progress_interval,update_interval,mean_all_activity,' + \
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
+            f.write('random_seed,kernel_size,stride,n_filters,'
+                    'n_train,inhib,time,timestep,'
+                    'theta_plus,theta_decay,intensity,'
+                    'progress_interval,update_interval,mean_all_activity,'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,'
                     'max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,kernel_size,stride,n_filters,' + \
-                    'n_train,n_test,inhib,time,timestep,' + \
-                    'theta_plus,theta_decay,intensity,' + \
-                    'progress_interval,update_interval,mean_all_activity,' + \
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,' + \
+            f.write('random_seed,kernel_size,stride,n_filters,'
+                    'n_train,n_test,inhib,time,timestep,'
+                    'theta_plus,theta_decay,intensity,'
+                    'progress_interval,update_interval,mean_all_activity,'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,'
                     'max_proportion_weighting,max_ngram\n')
 
 with open(os.path.join(path, name), 'a') as f:
