@@ -117,8 +117,8 @@ locations = locations.view(kernel_size ** 2, conv_size ** 2)
 # Build network.
 if train:
     network = LocallyConnectedNetwork(
-        n_inpt=784, kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib, dt=dt, nu_pre=1e-4,
-        nu_post=1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=0.2
+        n_inpt=784, input_shape=[28, 28], kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib,
+        dt=dt, nu_pre=1e-4, nu_post=1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=0.2
     )
 else:
     path = os.path.join('..', '..', 'params', data, model)

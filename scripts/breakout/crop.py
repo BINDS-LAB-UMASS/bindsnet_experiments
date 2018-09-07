@@ -112,7 +112,8 @@ n_classes = 4
 # Build network.
 if train:
     network = DiehlAndCook2015(
-        n_inpt=50*72, n_neurons=n_neurons, exc=25.0, inh=inhib, dt=dt, norm=64, theta_plus=theta_plus
+        n_inpt=50*72, n_neurons=n_neurons, exc=25.0, inh=inhib,
+        dt=dt, norm=64, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))

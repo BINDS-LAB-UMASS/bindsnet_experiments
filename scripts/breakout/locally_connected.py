@@ -63,6 +63,11 @@ train = args.train
 plot = args.plot
 gpu = args.gpu
 
+if len(kernel_size) == 1:
+    kernel_size = kernel_size[0]
+if len(stride) == 1:
+    stride = stride[0]
+
 args = vars(args)
 
 print()
@@ -117,21 +122,25 @@ per_class = int(n_examples / n_classes)
 # Build network.
 if train:
     network = LocallyConnectedNetwork(
-        n_inpt=80*80, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
+        n_inpt=80*80, input_shape=[80, 80], kernel_size=kernel_size, stride=stride, n_filters=n_filters,
         inh=inhib, dt=dt, norm=0.2, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
     network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
 
+for l in network.layers:
+    print(network.layers[l].shape)
+for c in network.connections:
+    print(network.connections[c].w.shape)
+
 conv_size = network.connections[('X', 'Y')].conv_size
 locations = network.connections[('X', 'Y')].locations
-n_neurons = n_filters * conv_size ** 2
+n_neurons = n_filters * int(np.prod(conv_size))
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 80 ** 2)
+images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 6400)
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
-# images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
 _images = torch.FloatTensor()
@@ -262,14 +271,12 @@ for i in range(n_examples):
         reconstruction = inpts['X'].view(time, 80 ** 2).sum(0).view(80, 80)
         _spikes = {layer: spikes[layer].get('s') for layer in spikes}
         input_exc_weights = network.connections[('X', 'Y')].w
-        # square_assignments = get_square_assignments(assignments, n_sqrt)
 
         inpt_axes, inpt_ims = plot_input(inpt, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
         spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_locally_connected_weights(
-            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, 80, im=weights_im
+            input_exc_weights, n_filters, kernel_size, conv_size, locations, 80, im=weights_im
         )
-        # assigns_im = plot_assignments(square_assignments, im=assigns_im)
         perf_ax = plot_performance(curves, ax=perf_ax)
 
         plt.pause(1e-8)
