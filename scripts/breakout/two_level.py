@@ -11,11 +11,11 @@ from sklearn.metrics import confusion_matrix
 from bindsnet.learning import NoOp
 from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network
+from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
-from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import update_ngram_scores, assign_labels
-from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assignments, plot_weights, plot_input, \
-    plot_locally_connected_weights
+from bindsnet.utils import get_square_weights, get_square_assignments
+from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assignments, plot_weights, plot_input
 
 sys.path.append('..')
 
@@ -24,12 +24,12 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--kernel_size', type=int, nargs='+', default=20)
-parser.add_argument('--stride', type=int, nargs='+', default=20)
-parser.add_argument('--n_filters', type=int, default=25)
+parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
-parser.add_argument('--inhib', type=float, default=100.0)
+parser.add_argument('--start_inhib', type=float, default=1.0)
+parser.add_argument('--max_inhib', type=float, default=100.0)
+parser.add_argument('--p_low', type=float, default=0.1)
 parser.add_argument('--time', type=int, default=300)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.5)
@@ -46,12 +46,12 @@ parser.set_defaults(plot=False, gpu=False, train=True)
 args = parser.parse_args()
 
 seed = args.seed
-kernel_size = args.kernel_size
-stride = args.stride
-n_filters = args.n_filters
+n_neurons = args.n_neurons
 n_train = args.n_train
 n_test = args.n_test
-inhib = args.inhib
+start_inhib = args.start_inhib
+max_inhib = args.max_inhib
+p_low = args.p_low
 time = args.time
 dt = args.dt
 theta_plus = args.theta_plus
@@ -63,11 +63,6 @@ train = args.train
 plot = args.plot
 gpu = args.gpu
 
-if len(kernel_size) == 1:
-    kernel_size = kernel_size[0]
-if len(stride) == 1:
-    stride = stride[0]
-
 args = vars(args)
 
 print()
@@ -77,7 +72,7 @@ for key, value in args.items():
 
 print()
 
-model = 'locally_connected'
+model = 'two_level'
 data = 'breakout'
 
 top_level = os.path.join('..', '..')
@@ -95,12 +90,12 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
+    seed, n_neurons, n_train, start_inhib, max_inhib, p_low, time, dt,
     theta_plus, theta_decay, intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time,
+    seed, n_neurons, n_train, n_test, start_inhib, max_inhib, p_low, time,
     dt, theta_plus, theta_decay, intensity, progress_interval, update_interval
 ]
 
@@ -115,32 +110,26 @@ else:
     torch.manual_seed(seed)
 
 n_examples = n_train if train else n_test
+n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 n_classes = 4
 per_class = int(n_examples / n_classes)
+n_low = int(p_low * n_train)
 
 # Build network.
 if train:
-    network = LocallyConnectedNetwork(
-        n_inpt=80*80, input_shape=[80, 80], kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-        inh=inhib, dt=dt, norm=0.2, theta_plus=theta_plus, theta_decay=theta_decay
+    network = IncreasingInhibitionNetwork(
+        n_input=50*72, n_neurons=n_neurons, start_inhib=start_inhib, max_inhib=max_inhib,
+        dt=dt, norm=64, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
-    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
-
-for l in network.layers:
-    print(network.layers[l].shape)
-for c in network.connections:
-    print(network.connections[c].w.shape)
-
-conv_size = network.connections[('X', 'Y')].conv_size
-locations = network.connections[('X', 'Y')].locations
-n_neurons = n_filters * int(np.prod(conv_size))
+    network.connections[('X', 'Ae')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 6400)
+images = torch.load(os.path.join(data_path, 'frames.pt'))
 labels = torch.load(os.path.join(data_path, 'labels.pt'))
+images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
 _images = torch.Tensor().float()
@@ -246,6 +235,10 @@ for i in range(n_examples):
 
         print()
 
+    if i == n_low:
+        w = -max_inhib * torch.diag(torch.ones(n_neurons))
+        network.connections['Y', 'Y'].w = w
+
     # Get next input sample.
     image = images[i % len(images)]
     sample = bernoulli(datum=image, time=time)
@@ -267,16 +260,17 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = images[i % len(images)].view(80, 80)
-        reconstruction = inpts['X'].view(time, 80 ** 2).sum(0).view(80, 80)
+        inpt = images[i % len(images)].view(50, 72)
+        reconstruction = inpts['X'].view(time, 50*72).sum(0).view(50, 72)
         _spikes = {layer: spikes[layer].get('s') for layer in spikes}
         input_exc_weights = network.connections[('X', 'Y')].w
+        square_weights = get_square_weights(input_exc_weights.view(50*72, n_neurons), n_sqrt, side=(50, 72))
+        square_assignments = get_square_assignments(assignments, n_sqrt)
 
         inpt_axes, inpt_ims = plot_input(inpt, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
         spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
-        weights_im = plot_locally_connected_weights(
-            input_exc_weights, n_filters, kernel_size, conv_size, locations, 80, im=weights_im
-        )
+        weights_im = plot_weights(square_weights, im=weights_im)
+        assigns_im = plot_assignments(square_assignments, im=assigns_im)
         perf_ax = plot_performance(curves, ax=perf_ax)
 
         plt.pause(1e-8)

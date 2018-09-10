@@ -126,8 +126,8 @@ labels = torch.load(os.path.join(data_path, 'labels.pt'))
 images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
-_images = torch.FloatTensor()
-_labels = torch.LongTensor()
+_images = torch.Tensor().float()
+_labels = torch.Tensor().long()
 for i in range(4):
     indices = np.where(labels == i)[0]
     indices = np.random.choice(indices, size=per_class, replace=True)
@@ -157,7 +157,7 @@ else:
 
 # Sequence of accuracy estimates.
 curves = {'all': [], 'proportion': [], 'ngram': []}
-predictions = {'all': torch.LongTensor(), 'proportion': torch.LongTensor(), 'ngram': torch.LongTensor()}
+predictions = {'all': torch.Tensor().long(), 'proportion': torch.Tensor().long(), 'ngram': torch.Tensor().long()}
 
 if train:
     best_accuracy = 0
@@ -201,8 +201,6 @@ for i in range(n_examples):
             proportions=proportions, ngram_scores=ngram_scores, n=2
         )
         print_results(curves)
-
-        print(current_labels, preds)
 
         for scheme in preds:
             predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)

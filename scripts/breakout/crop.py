@@ -151,7 +151,7 @@ else:
 
 # Sequence of accuracy estimates.
 curves = {'all': [], 'proportion': [], 'ngram': []}
-predictions = {'all': torch.LongTensor(), 'proportion': torch.LongTensor(), 'ngram': torch.LongTensor()}
+predictions = {'all': torch.Tensor().long(), 'proportion': torch.Tensor().long(), 'ngram': torch.Tensor().long()}
 
 if train:
     best_accuracy = 0
