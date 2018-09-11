@@ -30,6 +30,7 @@ parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--start_inhib', type=float, default=1.0)
 parser.add_argument('--max_inhib', type=float, default=100.0)
 parser.add_argument('--p_low', type=float, default=0.1)
+parser.add_argument('--norm', type=float, default=0.2)
 parser.add_argument('--time', type=int, default=300)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.5)
@@ -52,6 +53,7 @@ n_test = args.n_test
 start_inhib = args.start_inhib
 max_inhib = args.max_inhib
 p_low = args.p_low
+norm = args.norm
 time = args.time
 dt = args.dt
 theta_plus = args.theta_plus
@@ -90,12 +92,12 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, n_neurons, n_train, start_inhib, max_inhib, p_low, time, dt,
+    seed, n_neurons, n_train, start_inhib, max_inhib, p_low, norm, time, dt,
     theta_plus, theta_decay, intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, n_neurons, n_train, n_test, start_inhib, max_inhib, p_low, time,
+    seed, n_neurons, n_train, n_test, start_inhib, max_inhib, p_low, norm, time,
     dt, theta_plus, theta_decay, intensity, progress_interval, update_interval
 ]
 
@@ -124,7 +126,7 @@ if train:
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
-    network.connections[('X', 'Ae')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
+    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Y')])
 
 # Load Breakout data.
 images = torch.load(os.path.join(data_path, 'frames.pt'))
@@ -335,15 +337,15 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'random_seed,n_neurons,n_train,inhib,time,timestep,theta_plus,theta_decay,intensity,progress_interval,'
-                'update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,max_all_activity,'
-                'max_proportion_weighting,max_ngram\n'
+                'random_seed,n_neurons,n_train,start_inhib,max_inhib,p_low,norm,time,timestep,theta_plus,theta_decay,'
+                'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
+                'max_all_activity,max_proportion_weighting,max_ngram\n'
             )
         else:
             f.write(
-                'random_seed,n_neurons,n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,intensity,'
-                'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
-                'max_all_activity,max_proportion_weighting,max_ngram\n'
+                'random_seed,n_neurons,n_train,n_test,start_inhib,max_inhib,p_low,norm,time,timestep,theta_plus,'
+                'theta_decay,intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:

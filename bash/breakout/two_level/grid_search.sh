@@ -14,14 +14,17 @@ do
                     do
                         for p_low in 0.1 0.25
                         do
-                            for time in 250
+                            for norm in 0.1 0.15 0.2 0.25
                             do
-                                for theta_plus in 0.05 0.5 1.0
+                                for time in 250
                                 do
-                                    for theta_decay in 5e-6 1e-6 5e-5
+                                    for theta_plus in 0.05 0.5 1.0
                                     do
-                                        sbatch submit.sh $seed $n_neurons $n_train $n_test $start_inhib \
-                                                         $max_inhib $p_low $time $theta_plus $theta_decay
+                                        for theta_decay in 5e-6 1e-6 5e-5
+                                        do
+                                            sbatch submit.sh $seed $n_neurons $n_train $n_test $start_inhib \
+                                                             $max_inhib $p_low $norm $time $theta_plus $theta_decay
+                                        done
                                     done
                                 done
                             done
