@@ -127,7 +127,7 @@ if train:
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
-    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
+    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Y')])
 
 for l in network.layers:
     print(network.layers[l].shape)
