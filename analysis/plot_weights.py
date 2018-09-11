@@ -20,7 +20,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
         print('File not found locally. Attempting download from swarm2 cluster.')
         download_params.main(model=model, data=data, param_string=param_string)
 
-    network = p.load(open(f, 'rb'))
+    network = torch.load(open(f, 'rb'))
 
     if model in ['diehl_and_cook_2015', 'two_level_inhibition']:
         params = param_string.split('_')

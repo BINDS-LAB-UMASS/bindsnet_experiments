@@ -27,8 +27,8 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--inhib', type=float, default=250.0)
-parser.add_argument('--kernel_size', type=int, default=16)
-parser.add_argument('--stride', type=int, default=4)
+parser.add_argument('--kernel_size', nargs='+', type=int, default=[16])
+parser.add_argument('--stride', nargs='+', type=int, default=[4])
 parser.add_argument('--n_filters', type=int, default=16)
 parser.add_argument('--time', type=int, default=250)
 parser.add_argument('--dt', type=float, default=1.0)
@@ -63,6 +63,18 @@ train = args.train
 plot = args.plot
 gpu = args.gpu
 
+if len(kernel_size) == 1:
+    kernel_size = kernel_size[0]
+if len(stride) == 1:
+    stride = stride[0]
+
+args = vars(args)
+
+print()
+print('Command-line argument values:')
+for key, value in args.items():
+    print('-', key, ':', value)
+
 print()
 
 model = 'locally_connected'
@@ -92,27 +104,10 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
-if train:
-    n_examples = n_train
-else:
-    n_examples = n_test
-
+n_examples = n_train if train else n_test
 start_intensity = intensity
-
-if kernel_size == 28:
-    conv_size = 1
-else:
-    conv_size = int((28 - kernel_size) / stride) + 1
-
-n_neurons = n_filters * conv_size ** 2
-
-locations = torch.zeros(kernel_size, kernel_size, conv_size ** 2).long()
-for c in range(conv_size ** 2):
-    for k1 in range(kernel_size):
-        for k2 in range(kernel_size):
-            locations[k1, k2, c] = (c % conv_size) * stride * 28 + (c // conv_size) * stride + k1 * 28 + k2
-
-locations = locations.view(kernel_size ** 2, conv_size ** 2)
+n_classes = 10
+per_class = int(n_examples / n_classes)
 
 # Build network.
 if train:
@@ -126,6 +121,11 @@ else:
     network.connections[('X', 'Y')].update_rule = NoOp(
         connection=network.connections[('X', 'Y')], nu=network.connections[('X', 'Y')].nu
     )
+
+conv_size = network.connections[('X', 'Y')].conv_size
+locations = network.connections[('X', 'Y')].locations
+conv_prod = int(np.prod(conv_size))
+n_neurons = n_filters * conv_prod
 
 # Voltage recording for excitatory and inhibitory layers.
 voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
@@ -154,10 +154,10 @@ if train:
 else:
     path = os.path.join('..', '..', 'params', data, model)
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
-    assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
+    assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Accuracy curves recording.
-curves = {'all' : [], 'proportion' : [], 'ngram' : []}
+curves = {'all': [], 'proportion': [], 'ngram': []}
 
 if train:
     best_accuracy = 0
@@ -211,7 +211,7 @@ for i in range(n_examples):
 
                     network.save(os.path.join(path, model_name + '.pt'))
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -246,7 +246,7 @@ for i in range(n_examples):
     if plot:
         inpt = inpts['X'].view(time, 784).sum(0).view(28, 28)
         _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
-                   'Y': spikes['Y'].get('s').view(n_filters * conv_size ** 2, time)}
+                   'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)}
 
         spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_locally_connected_weights(
@@ -288,7 +288,7 @@ if train:
 
             network.save(os.path.join(path, model_name + '.p'))
             path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-            p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -314,7 +314,7 @@ else:
 to_write = [str(x) for x in to_write]
 f = '_'.join(to_write) + '.p'
 
-p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+torch.save((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 
 # Save results to disk.
 path = os.path.join('..', '..', 'results', data, model)

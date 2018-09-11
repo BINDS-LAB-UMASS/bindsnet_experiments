@@ -24,8 +24,8 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--kernel_size', type=int, nargs='+', default=20)
-parser.add_argument('--stride', type=int, nargs='+', default=20)
+parser.add_argument('--kernel_size', type=int, nargs='+', default=[20])
+parser.add_argument('--stride', type=int, nargs='+', default=[20])
 parser.add_argument('--n_filters', type=int, default=25)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
@@ -136,7 +136,9 @@ for c in network.connections:
 
 conv_size = network.connections[('X', 'Y')].conv_size
 locations = network.connections[('X', 'Y')].locations
-n_neurons = n_filters * int(np.prod(conv_size))
+conv_prod = int(np.prod(conv_size))
+n_neurons = n_filters * conv_prod
+
 
 # Load Breakout data.
 images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 6400)

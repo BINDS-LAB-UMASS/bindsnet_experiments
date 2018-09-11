@@ -123,7 +123,7 @@ if train:
 else:
     path = os.path.join('..', '..', 'params', data, model)
     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-    assignments, proportions, rates, ngram_scores = p.load(open(path, 'rb'))
+    assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
 curves = {'all' : [], 'proportion' : [], 'ngram' : []}
@@ -180,7 +180,7 @@ for i in range(n_examples):
 
                     network.save(os.path.join(path, model_name + '.p'))
                     path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-                    p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -272,7 +272,7 @@ if train:
 
             network.save(os.path.join(path, model_name + '.p'))
             path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
-            p.dump((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -298,7 +298,7 @@ else:
 to_write = [str(x) for x in to_write]
 f = '_'.join(to_write) + '.p'
 
-p.dump((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
+torch.save((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 
 # Save results to disk.
 path = os.path.join('..', '..', 'results', data, model)
