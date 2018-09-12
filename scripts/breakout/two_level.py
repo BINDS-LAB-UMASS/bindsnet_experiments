@@ -30,7 +30,7 @@ parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--start_inhib', type=float, default=1.0)
 parser.add_argument('--max_inhib', type=float, default=100.0)
 parser.add_argument('--p_low', type=float, default=0.1)
-parser.add_argument('--norm', type=float, default=0.2)
+parser.add_argument('--norm', type=float, default=65)
 parser.add_argument('--time', type=int, default=300)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.5)
@@ -122,7 +122,7 @@ n_low = int(p_low * n_train)
 if train:
     network = IncreasingInhibitionNetwork(
         n_input=50*72, n_neurons=n_neurons, start_inhib=start_inhib, max_inhib=max_inhib,
-        dt=dt, norm=64, theta_plus=theta_plus, theta_decay=theta_decay
+        dt=dt, norm=norm, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
