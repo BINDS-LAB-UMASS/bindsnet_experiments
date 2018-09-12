@@ -16,7 +16,10 @@ do
                         do
                             for theta_decay in 1e-7 5e-6 1e-6
                             do
-                                sbatch submit.sh $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay
+                                for norm in 0.01 0.05 0.1 0.15 0.2
+                                    sbatch submit.sh $seed $n_neurons $n_train $n_test $inhib \
+                                                 $time $theta_plus $theta_decay $norm
+                                done
                             done
                         done
                     done

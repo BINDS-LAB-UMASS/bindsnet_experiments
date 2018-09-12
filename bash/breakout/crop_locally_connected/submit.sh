@@ -15,16 +15,17 @@ inhib=${5:-25.0}
 time=${6:-350}
 theta_plus=${7:-0.05}
 theta_decay=${8:-1e-7}
+norm=${9:-0.2}
 
 cd ../../../scripts/breakout/
 source activate py36
 
-echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay
+echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $norm
 
 python crop_locally_connected.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 		            --n_test $n_test --inhib $inhib --time $time \
-			        --theta_plus $theta_plus --theta_decay $theta_decay
+			        --theta_plus $theta_plus --theta_decay $theta_decay --norm $norm
 python crop_locally_connected.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
                     --n_test $n_test --inhib $inhib --time $time \
-			        --theta_plus $theta_plus --theta_decay $theta_decay
+			        --theta_plus $theta_plus --theta_decay $theta_decay --norm $norm
 exit

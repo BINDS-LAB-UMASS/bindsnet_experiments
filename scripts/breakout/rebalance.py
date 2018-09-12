@@ -89,7 +89,7 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
 
 params = [
     seed, n_neurons, n_train, inhib, time, dt, theta_plus,
-    theta_decay, norm intensity, progress_interval, update_interval
+    theta_decay, norm, intensity, progress_interval, update_interval
 ]
 
 test_params = [
