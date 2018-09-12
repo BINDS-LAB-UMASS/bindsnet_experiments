@@ -2,23 +2,30 @@
 
 for seed in 0
 do
-    for n_neurons in 100 200 300 400 500
+    for kernel_size in '25 36' '10 36' '10 24' '25 24'
     do
-        for n_train in 10000 20000 30000 40000 50000
+        for stride in '5 6' '10 12' '5 12' '10 6'
         do
-            for n_test in 10000
+            for n_filters in 9 16 25
             do
-                for inhib in 100
+                for n_train in 16000
                 do
-                    for time in 250
+                    for n_test in 10000
                     do
-                        for theta_plus in 0.05
+                        for inhib in 100
                         do
-                            for theta_decay in 1e-7 5e-6 1e-6
+                            for time in 250
                             do
-                                for norm in 0.01 0.05 0.1 0.15 0.2
-                                    sbatch gpu_submit.sh $seed $n_neurons $n_train $n_test $inhib \
-                                                         $time $theta_plus $theta_decay $norm
+                                for theta_plus in 1.0
+                                do
+                                    for theta_decay in 1e-5
+                                    do
+                                        for norm in 0.01 0.05 0.1 0.15 0.2
+                                        do
+                                            sbatch gpu_submit.sh $seed $kernel_size $stride $n_filters $n_train \
+                                                                 $n_test $inhib $time $theta_plus $theta_decay $norm
+                                        done
+                                    done
                                 done
                             done
                         done
