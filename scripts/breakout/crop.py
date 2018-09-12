@@ -104,6 +104,8 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
+device = 'cuda' if gpu else 'cpu'
+
 n_examples = n_train if train else n_test
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
@@ -120,8 +122,8 @@ else:
     network.connections[('X', 'Ae')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt'))
-labels = torch.load(os.path.join(data_path, 'labels.pt'))
+images = torch.load(os.path.join(data_path, 'frames.pt'), map_location=torch.device(device))
+labels = torch.load(os.path.join(data_path, 'labels.pt'), map_location=torch.device(device))
 images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly permute the data.

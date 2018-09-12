@@ -114,6 +114,8 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
+device = 'cuda' if gpu else 'cpu'
+
 n_examples = n_train if train else n_test
 start_intensity = intensity
 n_classes = 4
@@ -141,8 +143,8 @@ n_neurons = n_filters * conv_prod
 
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt')).view(-1, 6400)
-labels = torch.load(os.path.join(data_path, 'labels.pt'))
+images = torch.load(os.path.join(data_path, 'frames.pt'), map_location=torch.device(device)).view(-1, 6400)
+labels = torch.load(os.path.join(data_path, 'labels.pt'), map_location=torch.device(device))
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
 _images = torch.Tensor().float()
