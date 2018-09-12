@@ -1,17 +1,13 @@
 import os
 import sys
-import scp
 import yaml
 import argparse
-import pandas as pd
 
+from tqdm import tqdm
 from paramiko import SSHClient
-from scp import SCPClient
 
 
-def main(model='diehl_and_cook_2015',
-         data='mnist',
-         param_string=None):
+def main(model='diehl_and_cook_2015', data='mnist', param_string=None, match=None):
     """
     Downloads parameters for a particular network from the CICS swarm2 cluster.
     """
@@ -37,18 +33,28 @@ def main(model='diehl_and_cook_2015',
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 
-    sftp.get(param_string + '.p', os.path.join(localpath, param_string + '.p'))
+    if param_string is None:
+        for f in tqdm(sftp.listdir()):
+            if match is not None:
+                if f.startswith(match):
+                    sftp.get(f, os.path.join(localpath, f))
+            else:
+                sftp.get(f, os.path.join(localpath, f))
+    else:
+        sftp.get(param_string + '.pt', os.path.join(localpath, param_string + '.pt'))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
-    parser.add_argument('--param_string', type=str, required=True)
+    parser.add_argument('--param_string', type=str, default=None)
+    parser.add_argument('--match', type=str, default=None)
     args = parser.parse_args()
 
     model = args.model
     data = args.data
     param_string = args.param_string
+    match = args.match
 
-    main(model, data, param_string)
+    main(model, data, param_string, match)
