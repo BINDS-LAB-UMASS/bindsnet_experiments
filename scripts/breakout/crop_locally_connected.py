@@ -109,6 +109,8 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
+device = 'cuda' if gpu else 'cpu'
+
 n_examples = n_train if train else n_test
 start_intensity = intensity
 n_classes = 4
@@ -132,8 +134,8 @@ locations = network.connections[('X', 'Y')].locations
 n_neurons = n_filters * np.prod(conv_size)
 
 # Load Breakout data.
-images = torch.load(os.path.join(data_path, 'frames.pt'))
-labels = torch.load(os.path.join(data_path, 'labels.pt'))
+images = torch.load(os.path.join(data_path, 'frames.pt'), map_location=torch.device(device))
+labels = torch.load(os.path.join(data_path, 'labels.pt'), map_location=torch.device(device))
 images = images[:, 30:, 4:-4].contiguous().view(-1, 50*72)  # Crop out the borders of the frames.
 
 # Randomly sample n_examples examples, with n_examples / 4 per class.
