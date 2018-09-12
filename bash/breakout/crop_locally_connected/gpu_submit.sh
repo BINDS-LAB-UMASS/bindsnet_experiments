@@ -27,10 +27,10 @@ source activate py36
 
 echo $seed $k1 $k2 $s1 $s2 $n_filters $n_train $n_test $inhib $time $theta_plus $theta_decay $norm
 
-python crop_locally_connected.py --train --seed $seed --kernel_size $k1 $k2 --stride $s1 $s2 \
+python crop_locally_connected.py --gpu --train --seed $seed --kernel_size $k1 $k2 --stride $s1 $s2 \
                                  --n_filters $n_filters --n_train $n_train --n_test $n_test --inhib $inhib \
                                  --time $time --theta_plus $theta_plus --theta_decay $theta_decay --norm $norm
-python crop_locally_connected.py --test --seed $seed --kernel_size $k1 $k2 --stride $s1 $s2 \
+python crop_locally_connected.py --gpu --test --seed $seed --kernel_size $k1 $k2 --stride $s1 $s2 \
                                  --n_filters $n_filters --n_train $n_train --n_test $n_test --inhib $inhib \
                                  --time $time --theta_plus $theta_plus --theta_decay $theta_decay --norm $norm
 exit
