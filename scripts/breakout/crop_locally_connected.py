@@ -92,14 +92,15 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
-    theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
+    seed, kernel_size[0], kernel_size[1], stride[0], stride[1], n_filters, n_train, inhib,
+    time, dt, theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time,
-    dt, theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
+    seed, kernel_size[0], kernel_size[1], stride[0], stride[1], n_filters, n_train, n_test,
+    inhib, time, dt, theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
 ]
+
 
 model_name = '_'.join([str(x) for x in params])
 
@@ -339,13 +340,15 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'random_seed,n_neurons,n_train,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
+                'random_seed,vertical_kernel_size,horizontal_kernel_size,vertical_stride,horizontal_stride,n_filters,'
+                'n_train,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
                 'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
                 'max_all_activity,max_proportion_weighting,max_ngram\n'
             )
         else:
             f.write(
-                'random_seed,n_neurons,n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
+                'random_seed,vertical_kernel_size,horizontal_kernel_size,vertical_stride,horizontal_stride,n_filters,'
+                'n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
                 'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
                 'max_all_activity,max_proportion_weighting,max_ngram\n'
             )

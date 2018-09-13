@@ -34,6 +34,7 @@ parser.add_argument('--time', type=int, default=300)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.5)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
+parser.add_argument('--norm', type=float, default=0.1)
 parser.add_argument('--intensity', type=float, default=0.5)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=100)
@@ -56,6 +57,7 @@ time = args.time
 dt = args.dt
 theta_plus = args.theta_plus
 theta_decay = args.theta_decay
+norm = args.norm
 intensity = args.intensity
 progress_interval = args.progress_interval
 update_interval = args.update_interval
@@ -64,9 +66,9 @@ plot = args.plot
 gpu = args.gpu
 
 if len(kernel_size) == 1:
-    kernel_size = kernel_size[0]
+    kernel_size = [kernel_size[0], kernel_size[0]]
 if len(stride) == 1:
-    stride = stride[0]
+    stride = [stride[0], stride[0]]
 
 args = vars(args)
 
@@ -95,13 +97,13 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
-    theta_plus, theta_decay, intensity, progress_interval, update_interval
+    seed, kernel_size[0], kernel_size[1], stride[0], stride[1], n_filters, n_train, inhib,
+    time, dt, theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time,
-    dt, theta_plus, theta_decay, intensity, progress_interval, update_interval
+    seed, kernel_size[0], kernel_size[1], stride[0], stride[1], n_filters, n_train, n_test,
+    inhib, time, dt, theta_plus, theta_decay, norm, intensity, progress_interval, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
@@ -125,7 +127,7 @@ per_class = int(n_examples / n_classes)
 if train:
     network = LocallyConnectedNetwork(
         n_inpt=80*80, input_shape=[80, 80], kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-        inh=inhib, dt=dt, norm=0.2, theta_plus=theta_plus, theta_decay=theta_decay
+        inh=inhib, dt=dt, norm=norm, theta_plus=theta_plus, theta_decay=theta_decay
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
@@ -345,13 +347,15 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'random_seed,n_neurons,n_train,inhib,time,timestep,theta_plus,theta_decay,intensity,progress_interval,'
-                'update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,max_all_activity,'
-                'max_proportion_weighting,max_ngram\n'
+                'random_seed,vertical_kernel_size,horizontal_kernel_size,vertical_stride,horizontal_stride,n_filters,'
+                'n_train,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
+                'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
+                'max_all_activity,max_proportion_weighting,max_ngram\n'
             )
         else:
             f.write(
-                'random_seed,n_neurons,n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,intensity,'
+                'random_seed,vertical_kernel_size,horizontal_kernel_size,vertical_stride,horizontal_stride,n_filters,'
+                'n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,norm,intensity,'
                 'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,'
                 'max_all_activity,max_proportion_weighting,max_ngram\n'
             )
