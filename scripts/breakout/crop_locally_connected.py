@@ -74,7 +74,7 @@ for key, value in args.items():
 
 print()
 
-model = 'locally_connected'
+model = 'crop_locally_connected'
 data = 'breakout'
 
 top_level = os.path.join('..', '..')
@@ -126,7 +126,7 @@ if train:
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
-    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Ae')])
+    network.connections[('X', 'Y')].update_rule = NoOp(connection=network.connections[('X', 'Y')])
 
 for l in network.layers:
     print(f'Layer {l} has {network.layers[l].n} neurons')
