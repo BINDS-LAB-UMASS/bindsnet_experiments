@@ -35,6 +35,7 @@ def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', train=True
     ssh.connect(f'{cluster}.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
+    print(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     
     localpath = os.path.join('..', 'results', data, model)

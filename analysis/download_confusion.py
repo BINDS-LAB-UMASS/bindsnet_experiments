@@ -7,11 +7,13 @@ from tqdm import tqdm
 from paramiko import SSHClient
 
 
-def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', param_string=None, match=None):
+def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2', param_string=None, match=None):
+    # language=rst
     """
     Downloads parameters for a particular network from the CICS swarm2 cluster.
     """
     f = os.path.join('..', 'credentials.yml')
+    mode = 'train' if train else 'test'
 
     try:
         creds = yaml.load(open(f, 'r'))
@@ -27,9 +29,9 @@ def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', param_stri
     ssh.connect(f'{cluster}.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
-    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/params/{data}/{model}/')
-    
-    localpath = os.path.join('..', 'params', data, model)
+    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/confusion/{data}/{model}/')
+
+    localpath = os.path.join('..', 'confusion', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 
@@ -41,23 +43,28 @@ def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', param_stri
             else:
                 sftp.get(f, os.path.join(localpath, f))
     else:
-        sftp.get(param_string + '.pt', os.path.join(localpath, param_string + '.pt'))
-        sftp.get('auxiliary_' + param_string + '.pt', os.path.join(localpath, 'auxiliary_' + param_string + '.pt'))
+        sftp.get(
+            f'{mode}_{param_string}.pt', os.path.join(localpath, f'{mode}_{param_string}.pt')
+        )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
+    parser.add_argument('--train', dest='train', action='store_true')
+    parser.add_argument('--test', dest='train', action='store_false')
     parser.add_argument('--cluster', type=str, default='swarm2')
     parser.add_argument('--param_string', type=str, default=None)
     parser.add_argument('--match', type=str, default=None)
+    parser.set_defaults(train=False)
     args = parser.parse_args()
 
     model = args.model
     data = args.data
+    train = args.train
     cluster = args.cluster
     param_string = args.param_string
     match = args.match
 
-    main(model, data, cluster, param_string, match)
+    main(model, data, train, cluster, param_string, match)

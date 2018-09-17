@@ -9,12 +9,12 @@ from time import time as t
 
 from bindsnet.datasets import MNIST
 from bindsnet.network import Network
-from bindsnet.learning import post_pre
+from bindsnet.learning import PostPre
 from bindsnet.encoding import bernoulli
-from bindsnet.analysis.plotting import *
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
 
 sys.path.append('..')
 
@@ -26,8 +26,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
-parser.add_argument('--kernel_size', type=int, default=16)
-parser.add_argument('--stride', type=int, default=4)
+parser.add_argument('--kernel_size', type=int, nargs='+', default=[16])
+parser.add_argument('--stride', type=int, nargs='+', default=[4])
 parser.add_argument('--n_filters', type=int, default=25)
 parser.add_argument('--padding', type=int, default=0)
 parser.add_argument('--inhib', type=float, default=100.0)
@@ -42,8 +42,31 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
 
-args = vars(parser.parse_args())
-locals().update(args)
+args = parser.parse_args()
+
+seed = args.seed
+n_train = args.n_train
+n_test = args.n_test
+kernel_size = args.kernel_size
+stride = args.stride
+n_filters = args.n_filters
+padding = args.padding
+inhib = args.inhib
+time = args.time
+dt = args.dt
+intensity = args.intensity
+progress_interval = args.progress_interval
+update_interval = args.update_interval
+train = args.train
+plot = args.plot
+gpu = args.gpu
+
+if len(kernel_size) == 1:
+    kernel_size = [kernel_size[0], kernel_size[0]]
+if len(stride) == 1:
+    stride = [stride[0], stride[0]]
+
+args = vars(args)
 
 print('\nCommand-line argument values:')
 for key, value in args.items():
@@ -74,32 +97,33 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
-if train:
-    n_examples = n_train
-else:
-    n_examples = n_test
+n_examples = n_train if train else n_test
+input_shape = [28, 28]
 
-if kernel_size == 28:
-	conv_size = 1
+if kernel_size == input_shape:
+    conv_size = [1, 1]
 else:
-	conv_size = int((28 - kernel_size + 2 * padding) / stride) + 1
+    conv_size = (int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
+                 int((input_shape[1] - kernel_size[1]) / stride[1]) + 1)
 
 n_classes = 10
-n_neurons = n_filters * conv_size ** 2
+n_neurons = n_filters * np.prod(conv_size)
 per_class = int(n_neurons / n_classes)
+total_kernel_size = int(np.prod(kernel_size))
+total_conv_size = int(np.prod(conv_size))
 
 # Build network.
 network = Network()
 input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
-conv_layer = DiehlAndCookNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size),
-                               thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size / 28), refrac=0)
-conv_layer2 = LIFNodes(n=n_filters * conv_size * conv_size, shape=(1, n_filters, conv_size, conv_size), refrac=0)
-conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=post_pre,
-                             norm=kernel_size ** 2, nu_pre=0, nu_post=1e-2, wmax=2.0)
+conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
+                               thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0)
+conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
+conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
+                             norm=int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
 conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
-                              update_rule=None, nu_pre=0, nu_post=1e-2, wmax=2.0)
+                              update_rule=None, nu=(0, 1e-2), wmax=2.0)
 
-w = torch.zeros(1, n_filters, conv_size, conv_size, 1, n_filters, conv_size, conv_size)
+w = torch.zeros(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
 for fltr1 in range(n_filters):
     for fltr2 in range(n_filters):
         # for i1 in range(conv_size):
@@ -113,11 +137,11 @@ for fltr1 in range(n_filters):
         #     for i in range(conv_size):
         #         for j in range(conv_size):
         #             w[0, fltr1, i, j, 0, fltr2, i, j] = -inhib
-        
-        for i1 in range(conv_size):
-            for j1 in range(conv_size):
-                for i2 in range(conv_size):
-                    for j2 in range(conv_size):
+
+        for i1 in range(conv_size[0]):
+            for j1 in range(conv_size[1]):
+                for i2 in range(conv_size[0]):
+                    for j2 in range(conv_size[1]):
                         if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
                             w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
 
@@ -127,7 +151,7 @@ for fltr1 in range(n_filters):
         #             for i2 in range(conv_size):
         #                 for j2 in range(conv_size):
         #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
-                    
+
 recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
 network.add_layer(input_layer, name='X')
@@ -166,7 +190,7 @@ else:
     assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
-curves = {'all' : [], 'proportion' : [], 'ngram' : []}
+curves = {'all': [], 'proportion': [], 'ngram': []}
 
 if train:
     best_accuracy = 0
@@ -181,6 +205,12 @@ if train:
     print('\nBegin training.\n')
 else:
     print('\nBegin test.\n')
+
+inpt_ims = None
+inpt_axes = None
+spike_ims = None
+spike_axes = None
+weights_im = None
 
 start = t()
 for i in range(n_examples):
@@ -227,10 +257,10 @@ for i in range(n_examples):
 
         print()
 
-     # Get next input sample.
+    # Get next input sample.
     image = images[i]
     sample = bernoulli(datum=image, time=time, max_prob=0.5).unsqueeze(1).unsqueeze(1)
-    inpts = {'X' : sample}
+    inpts = {'X': sample}
 
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
@@ -238,9 +268,8 @@ for i in range(n_examples):
     retries = 0
     while spikes['Y_'].get('s').sum() < 5 and retries < 3:
         retries += 1
-        image *= 2
-        sample = bernoulli(datum=image, time=time, max_prob=0.5).unsqueeze(1).unsqueeze(1)
-        inpts = {'X' : sample}
+        sample = bernoulli(datum=image, time=time, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
+        inpts = {'X': sample}
         network.run(inpts=inpts, time=time)
 
     # Add to spikes recording.
@@ -251,21 +280,17 @@ for i in range(n_examples):
         _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
         w = conv_conn.w
         _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
-                   'Y': spikes['Y'].get('s').view(n_filters * conv_size ** 2, time),
-                   'Y_': spikes['Y_'].get('s').view(n_filters * conv_size ** 2, time)}
-        
-        if i == 0:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), _input, label=labels[i])
-            spike_ims, spike_axes = plot_spikes(spikes=_spikes)
-            weights_im = plot_conv2d_weights(w, wmax=conv_conn.wmax)
-            
-        else:
-            inpt_axes, inpt_ims = plot_input(images[i].view(28, 28), _input, label=labels[i], axes=inpt_axes, ims=inpt_ims)
-            spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_conv2d_weights(w, im=weights_im)
-        
+                   'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
+                   'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)}
+
+        inpt_axes, inpt_ims = plot_input(
+            images[i].view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
+        )
+        spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
+        weights_im = plot_conv2d_weights(w, im=weights_im)
+
         plt.pause(1e-8)
-    
+
     network.reset_()  # Reset state variables.
 
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
@@ -328,8 +353,10 @@ path = os.path.join('..', '..', 'results', data, model)
 if not os.path.isdir(path):
     os.makedirs(path)
 
-results = [np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-           np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])]
+results = [
+    np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
+    np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
+]
 
 if train:
     to_write = params + results
@@ -338,23 +365,20 @@ else:
 
 to_write = [str(x) for x in to_write]
 
-if train:
-    name = 'train.csv'
-else:
-    name = 'test.csv'
+name = 'train.csv' if train else 'test.csv'
 
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
             columns = ['seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time', 'dt',
-                       'intensity',  'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
+                       'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
                        'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram']
 
             header = ','.join(columns) + '\n'
             f.write(header)
         else:
             columns = ['seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                       'dt', 'intensity',  'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
+                       'dt', 'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
                        'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram']
 
             header = ','.join(columns) + '\n'
