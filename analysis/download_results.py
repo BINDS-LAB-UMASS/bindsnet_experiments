@@ -9,9 +9,8 @@ from paramiko import SSHClient
 from scp import SCPClient
 
 
-def main(model='diehl_and_cook_2015',
-         data='mnist',
-         train=True):
+def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', train=True):
+    # language=rst
     """
     Downloads results CSV file from the CICS swarm2 cluster.
     """
@@ -33,9 +32,10 @@ def main(model='diehl_and_cook_2015',
 
     ssh = SSHClient()
     ssh.load_system_host_keys()
-    ssh.connect('swarm2.cs.umass.edu', username=username, password=password)
+    ssh.connect(f'{cluster}.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
+    print(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     
     localpath = os.path.join('..', 'results', data, model)
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
+    parser.add_argument('--cluster', type=str, default='swarm2')
     parser.add_argument('--train', dest='train', action='store_true')
     parser.add_argument('--test', dest='train', action='store_false')
     parser.set_defaults(train=False)
@@ -56,6 +57,7 @@ if __name__ == "__main__":
 
     model = args.model
     data = args.data
+    cluster = args.cluster
     train = args.train
 
-    main(model, data, train)
+    main(model, data, cluster, train)
