@@ -1,13 +1,11 @@
 import os
-import sys
 import torch
 import argparse
 import numpy as np
-import pickle as p
-import pandas as pd
+import matplotlib.pyplot as plt
 
-from bindsnet.utils import *
-from bindsnet.analysis.plotting import *
+from bindsnet.utils import get_square_weights
+from bindsnet.analysis.plotting import plot_weights, plot_locally_connected_weights
 
 import download_params
 
