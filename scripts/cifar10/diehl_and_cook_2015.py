@@ -3,11 +3,18 @@ import sys
 import torch
 import argparse
 import numpy as np
-import pickle as p
 import matplotlib.pyplot as plt
 
-from bindsnet import *
 from time import time as t
+
+from bindsnet.datasets import CIFAR10
+from bindsnet.encoding import poisson
+from bindsnet.network import load_network
+from bindsnet.models import DiehlAndCook2015
+from bindsnet.network.monitors import Monitor
+from bindsnet.utils import get_square_weights, get_square_assignments
+from bindsnet.evaluation import ngram, all_activity, proportion_weighting, assign_labels, update_ngram_scores
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
 sys.path.append('..')
 
@@ -34,8 +41,27 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
 
-args = vars(parser.parse_args())
-locals().update(args)
+args = parser.parse_args()
+
+seed = args.seed
+n_neurons = args.n_neurons
+n_train = args.n_train
+n_test = args.n_test
+excite = args.excite
+inhib = args.inhib
+time = args.time
+dt = args.dt
+theta_plus = args.theta_plus
+theta_decay = args.theta_decay
+intensity = args.intensity
+X_Ae_decay = args.X_Ae_decay
+progress_interval = args.progress_interval
+update_interval = args.update_interval
+train = args.train
+plot = args.plot
+gpu = args.gpu
+
+args = vars(args)
 
 print(); print('Command-line argument values:')
 for key, value in args.items():
@@ -49,18 +75,18 @@ data = 'cifar10'
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
-params = [seed, n_neurons, n_train, excite,
-          inhib, time, dt, theta_plus, theta_decay,
-          intensity, progress_interval,
-          update_interval, X_Ae_decay]
+params = [
+    seed, n_neurons, n_train, excite, inhib, time, dt, theta_plus,
+    theta_decay, intensity, progress_interval, update_interval, X_Ae_decay
+]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
-    test_params = [seed, n_neurons, n_train, n_test, excite,
-                   inhib, time, dt, theta_plus, theta_decay,
-                   intensity, progress_interval,
-                   update_interval, X_Ae_decay]
+    test_params = [
+        seed, n_neurons, n_train, n_test, excite, inhib, time, dt, theta_plus,
+        theta_decay, intensity, progress_interval, update_interval, X_Ae_decay
+    ]
 
 np.random.seed(seed)
 
@@ -70,23 +96,15 @@ if gpu:
 else:
     torch.manual_seed(seed)
 
-if train:
-    n_examples = n_train
-else:
-    n_examples = n_test
-
+n_examples = n_train if train else n_test
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # Build network.
 if train:
-    network = DiehlAndCook2015(n_inpt=32*32*3,
-                               n_neurons=n_neurons,
-                               exc=excite,
-                               inh=inhib,
-                               dt=dt,
-                               norm=307.2,
-                               theta_plus=0.05)
+    network = DiehlAndCook2015(
+        n_inpt=32*32*3, n_neurons=n_neurons, exc=excite, inh=inhib, dt=dt, norm=307.2, theta_plus=0.05
+    )
 
 else:
     path = os.path.join('..', '..', 'params', data, model)
@@ -100,14 +118,11 @@ network.add_monitor(exc_voltage_monitor, name='exc_voltage')
 network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
 # Load CIFAR-10 data.
-dataset = CIFAR10(path=os.path.join('..', '..', 'data', 'CIFAR10'),
-                  download=True)
+dataset = CIFAR10(
+    path=os.path.join('..', '..', 'data', 'CIFAR10'), download=True
+)
 
-if train:
-    images, labels = dataset.get_train()
-else:
-    images, labels = dataset.get_test()
-
+images, labels = dataset.get_train() if train else dataset.get_test()
 images = images.view(-1, 3072)
 images *= intensity
 
@@ -126,7 +141,7 @@ else:
     assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Sequence of accuracy estimates.
-curves = {'all' : [], 'proportion' : [], 'ngram' : []}
+curves = {'all': [], 'proportion': [], 'ngram': []}
 
 # Image categories.
 classes = ['none', 'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']

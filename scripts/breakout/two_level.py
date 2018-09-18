@@ -240,7 +240,7 @@ for i in range(n_examples):
         print()
 
     if i == n_low:
-        w = -max_inhib * torch.diag(torch.ones(n_neurons))
+        w = -max_inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
         network.connections['Y', 'Y'].w = w
 
     # Get next input sample.
