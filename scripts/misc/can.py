@@ -1,8 +1,8 @@
 import torch
 import argparse
 import matplotlib.pyplot as plt
-from bindsnet.models import CANs
 
+from bindsnet.models import CANs
 from bindsnet.network import *
 from bindsnet.analysis.plotting import plot_spikes
 
