@@ -119,13 +119,18 @@ conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filter
                                thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0)
 conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
 conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
-                             norm=int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
+                             norm=0.5 * int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
 conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
                               update_rule=None, nu=(0, 1e-2), wmax=2.0)
 
-w = torch.zeros(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
-for fltr1 in range(n_filters):
-    for fltr2 in range(n_filters):
+w = -inhib * torch.ones(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
+for f in range(n_filters):
+    for i in range(conv_size[0]):
+        for j in range(conv_size[1]):
+            w[0, f, i, j, 0, f, i, j] = 0
+
+# for fltr1 in range(n_filters):
+#     for fltr2 in range(n_filters):
         # for i1 in range(conv_size):
         #     for j1 in range(conv_size):
         #         for i2 in range(conv_size):
@@ -138,12 +143,12 @@ for fltr1 in range(n_filters):
         #         for j in range(conv_size):
         #             w[0, fltr1, i, j, 0, fltr2, i, j] = -inhib
 
-        for i1 in range(conv_size[0]):
-            for j1 in range(conv_size[1]):
-                for i2 in range(conv_size[0]):
-                    for j2 in range(conv_size[1]):
-                        if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
-                            w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
+        # for i1 in range(conv_size[0]):
+        #     for j1 in range(conv_size[1]):
+        #         for i2 in range(conv_size[0]):
+        #             for j2 in range(conv_size[1]):
+        #                 if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
+        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
 
         # if fltr1 != fltr2:
         #     for i1 in range(conv_size):
