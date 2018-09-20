@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-#SBATCH --partition=longq
-#SBATCH --time=02-00:00:00
-#SBATCH --mem=8000
+#SBATCH --partition=titanx-long
+#SBATCH --gres=gpu:1
+#SBATCH --time=03-00:00:00
+#SBATCH --mem=15000
 #SBATCH --account=rkozma
 #SBATCH --output=../../output/crop_locally_connected_%j.out
 #SBATCH --cpus-per-task=8
@@ -26,11 +27,11 @@ source activate py36
 
 echo $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity $norm
 
-python crop_locally_connected.py --train --seed $seed --kernel_size $kernel_size --stride $stride \
+python crop_locally_connected.py --gpu --train --seed $seed --kernel_size $kernel_size --stride $stride \
                                  --n_filters $n_filters --crop $crop --n_train $n_train --n_test $n_test \
                                  --inhib $inhib --time $time --theta_plus $theta_plus \
                                  --theta_decay $theta_decay --intensity $intensity --norm $norm
-python crop_locally_connected.py --test --seed $seed --kernel_size $kernel_size --stride $stride \
+python crop_locally_connected.py --gpu --test --seed $seed --kernel_size $kernel_size --stride $stride \
                                  --n_filters $n_filters --crop $crop --n_train $n_train --n_test $n_test \
                                  --inhib $inhib --time $time --theta_plus $theta_plus \
                                  --theta_decay $theta_decay --intensity $intensity --norm $norm
