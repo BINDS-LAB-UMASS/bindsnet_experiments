@@ -248,13 +248,13 @@ for i in range(n_examples):
 
     # Optionally plot various simulation information.
     if plot:
-        inpt = inpts['X'].view(time, 400).sum(0).view(20, 20)
-        _spikes = {'X': spikes['X'].get('s').view(20 ** 2, time),
+        inpt = inpts['X'].view(time, n_inpt).sum(0).view(side_length, side_length)
+        _spikes = {'X': spikes['X'].get('s').view(side_length ** 2, time),
                    'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)}
 
         spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_locally_connected_weights(
-            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, 20, im=weights_im
+            network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, side_length, im=weights_im
         )
 
         plt.pause(1e-8)
