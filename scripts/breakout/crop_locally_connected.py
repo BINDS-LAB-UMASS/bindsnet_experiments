@@ -14,8 +14,7 @@ from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import update_ngram_scores, assign_labels
-from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_assignments, plot_weights, plot_input, \
-    plot_locally_connected_weights
+from bindsnet.analysis.plotting import plot_spikes, plot_performance, plot_input, plot_locally_connected_weights
 
 sys.path.append('..')
 
@@ -179,7 +178,6 @@ if train:
     best_accuracy = 0
 
 spikes = {}
-
 for layer in set(network.layers) - {'X'}:
     spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
     network.add_monitor(spikes[layer], name='%s_spikes' % layer)
@@ -333,7 +331,6 @@ results = [
 
 to_write = params + results if train else test_params + results
 to_write = [str(x) for x in to_write]
-
 name = 'train.csv' if train else 'test.csv'
 
 if not os.path.isfile(os.path.join(results_path, name)):
