@@ -13,7 +13,7 @@ from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
-from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_weights
+from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
 from bindsnet.evaluation import all_activity, proportion_weighting, ngram, assign_labels, update_ngram_scores
 
 sys.path.append('..')
@@ -184,19 +184,16 @@ for i in range(n_examples):
         start = t()
 
     if i % update_interval == 0 and i > 0:
-        # Get network predictions.
-        all_activity_pred = all_activity(spike_record, assignments, 10)
-        proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
-        ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
-        
-        # Compute network accuracy according to available classification strategies.
-        curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == all_activity_pred) / update_interval)
-        curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                        == proportion_pred) / update_interval)
-        curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                        == ngram_pred) / update_interval)
+        if i % len(labels) == 0:
+            current_labels = labels[-update_interval:]
+        else:
+            current_labels = labels[i - update_interval:i]
 
+        # Update and print accuracy evaluations.
+        curves, predictions = update_curves(
+            curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
+            proportions=proportions, ngram_scores=ngram_scores, n=2
+        )
         print_results(curves)
 
         if train:
@@ -204,22 +201,21 @@ for i in range(n_examples):
                 print('New best accuracy! Saving network parameters to disk.')
 
                 # Save network to disk.
-                if train:
-                    path = os.path.join('..', '..', 'params', data, model)
-                    if not os.path.isdir(path):
-                        os.makedirs(path)
+                path = os.path.join('..', '..', 'params', data, model)
+                if not os.path.isdir(path):
+                    os.makedirs(path)
 
-                    network.save(os.path.join(path, model_name + '.pt'))
-                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                network.save(os.path.join(path, model_name + '.pt'))
+                path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
+                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
-            assignments, proportions, rates = assign_labels(spike_record, labels[i - update_interval:i], 10, rates)
+            assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
 
             # Compute ngram scores.
-            ngram_scores = update_ngram_scores(spike_record, labels[i - update_interval:i], 10, 2, ngram_scores)
+            ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
 
         print()
 
@@ -261,19 +257,16 @@ print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
 i += 1
 
-# Get network predictions.
-all_activity_pred = all_activity(spike_record, assignments, 10)
-proportion_pred = proportion_weighting(spike_record, assignments, proportions, 10)
-ngram_pred = ngram(spike_record, ngram_scores, 10, 2)
+if i % len(labels) == 0:
+    current_labels = labels[-update_interval:]
+else:
+    current_labels = labels[i - update_interval:i]
 
-# Compute network accuracy according to available classification strategies.
-curves['all'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                        == all_activity_pred) / update_interval)
-curves['proportion'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                == proportion_pred) / update_interval)
-curves['ngram'].append(100 * torch.sum(labels[i - update_interval:i].long() \
-                                                        == ngram_pred) / update_interval)
-
+# Update and print accuracy evaluations.
+curves, predictions = update_curves(
+    curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
+    proportions=proportions, ngram_scores=ngram_scores, n=2
+)
 print_results(curves)
 
 if train:

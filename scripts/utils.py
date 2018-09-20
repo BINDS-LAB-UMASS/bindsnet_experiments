@@ -1,12 +1,13 @@
 import torch
 import numpy as np
 
-from typing import Dict
+from typing import Dict, Tuple
 
-from bindsnet.evaluation import *
+from bindsnet.evaluation import all_activity, proportion_weighting, ngram
 
 
 def print_results(results: Dict[str, list]) -> None:
+    # language=rst
     """
     Prints out latest, mean, and maximum results per classification scheme.
 
@@ -21,7 +22,9 @@ def print_results(results: Dict[str, list]) -> None:
         print(f'Results for scheme "{s}": {last:.2f} (last), {mean:.2f} (mean), {best:.2f} (best)')
 
 
-def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int, **kwargs) -> Dict[str, list]:
+def update_curves(curves: Dict[str, list], labels: torch.Tensor,
+                  n_classes: int, **kwargs) -> Tuple[Dict[str, list], Dict[str, torch.Tensor]]:
+    # language=rst
     """
     Updates accuracy curves for each classification scheme.
 
@@ -63,6 +66,7 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor, n_classes: int,
 
 
 def bit_flip(x: torch.Tensor, p: float) -> torch.Tensor:
+    # language=rst
     """
     Takes a binary tensor and flips each entry with probability p.
 
