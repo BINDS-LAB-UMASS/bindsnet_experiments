@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
+
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
@@ -14,7 +16,7 @@ from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
-from bindsnet.evaluation import assign_labels, update_ngram_scores
+from bindsnet.evaluation import assign_labels, update_ngram_scores, logreg_fit
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
 
 sys.path.append('..')
@@ -169,19 +171,19 @@ if train:
     proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
     rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
     ngram_scores = {}
+    logreg = LogisticRegression(solver='newton-cg', warm_start=True, n_jobs=-1)
 else:
     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-    assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
-
-# Accuracy curves recording.
-curves = {'all': [], 'proportion': [], 'ngram': []}
+    assignments, proportions, rates, ngram_scores, logreg = torch.load(open(path, 'rb'))
 
 if train:
     best_accuracy = 0
 
 # Sequence of accuracy estimates.
-curves = {'all': [], 'proportion': [], 'ngram': []}
-predictions = {'all': torch.Tensor().long(), 'proportion': torch.Tensor().long(), 'ngram': torch.Tensor().long()}
+curves = {'all': [], 'proportion': [], 'ngram': [], 'logreg': []}
+predictions = {
+    scheme: torch.Tensor().long() for scheme in curves.keys()
+}
 
 spikes = {}
 for layer in set(network.layers):
@@ -213,7 +215,7 @@ for i in range(n_examples):
         # Update and print accuracy evaluations.
         curves, preds = update_curves(
             curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-            proportions=proportions, ngram_scores=ngram_scores, n=2
+            proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
         )
         print_results(curves)
 
@@ -232,7 +234,7 @@ for i in range(n_examples):
                 # Save network to disk.
                 network.save(os.path.join(params_path, model_name + '.pt'))
                 path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -241,6 +243,9 @@ for i in range(n_examples):
 
             # Compute ngram scores.
             ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
+
+            # Update logistic regression model.
+            logreg = logreg_fit(spikes=spike_record, labels=current_labels, logreg=logreg)
 
         print()
 
@@ -304,7 +309,7 @@ if train:
         # Save network to disk.
         network.save(os.path.join(params_path, model_name + '.pt'))
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+        torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
 
