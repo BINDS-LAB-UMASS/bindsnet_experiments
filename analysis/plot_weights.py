@@ -33,29 +33,35 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
         elif model in ['conv']:
             raise NotImplementedError('Automated plotting not yet implemented for "conv" network model.')
 
-        elif model in ['fully_conv', 'locally_connected']:
+        elif model in ['fully_conv', 'locally_connected', 'crop_locally_connected']:
             params = param_string.split('_')
             kernel_size = int(params[1])
             stride = int(params[2])
             n_filters = int(params[3])
 
-            input_sqrt = int(np.sqrt(network.layers['X'].n))
+            if model == 'crop_locally_connected':
+                crop = int(params[4])
+                side_length = 28 - crop * 2
+            else:
+                side_length = 28
 
-            if kernel_size == input_sqrt:
+            if kernel_size == side_length:
                 conv_size = 1
             else:
-                conv_size = int((input_sqrt - kernel_size) / stride) + 1
+                conv_size = int((side_length - kernel_size) / stride) + 1
 
-            locations = torch.zeros(kernel_size, kernel_size, conv_size ** 2).long()
-            for c in range(conv_size ** 2):
-                for k1 in range(kernel_size):
-                    for k2 in range(kernel_size):
-                        locations[k1, k2, c] = (c % conv_size) * stride * 28 + (c // conv_size) * stride + k1 * 28 + k2
+            locations = torch.zeros(kernel_size, kernel_size, conv_size, conv_size).long()
+            for c1 in range(conv_size):
+                for c2 in range(conv_size):
+                    for k1 in range(kernel_size):
+                        for k2 in range(kernel_size):
+                            location = c1 * stride * side_length + c2 * stride + k1 * side_length + k2
+                            locations[k1, k2, c1, c2] = location
 
             locations = locations.view(kernel_size ** 2, conv_size ** 2)
 
             w = network.connections[('X', 'Y')].w
-            plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, input_sqrt)
+            plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, side_length)
 
     elif data in ['breakout']:
         if model in ['crop', 'rebalance', 'two_level']:
