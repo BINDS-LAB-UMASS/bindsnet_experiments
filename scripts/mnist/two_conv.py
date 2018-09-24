@@ -80,7 +80,7 @@ for key, value in args.items():
 
 print()
 
-model = 'conv'
+model = 'two_conv'
 data = 'mnist'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -124,6 +124,8 @@ else:
         int((conv_size[0] - kernel_size2[0]) / stride2[0]) + 1, int((conv_size[1] - kernel_size2[1]) / stride2[1]) + 1
     )
 
+print(conv_size, conv_size2)
+
 n_classes = 10
 n_neurons = n_filters * np.prod(conv_size)
 per_class = int(n_neurons / n_classes)
@@ -151,7 +153,7 @@ conv_conn_ = Conv2dConnection(
     update_rule=None, nu=(0, 1e-2), wmax=2.0
 )
 conv_layer2 = DiehlAndCookNodes(
-    n=n_filters ** 2 * total_conv_size2, shape=(n_filters, n_filters, *conv_size2),
+    n=n_filters * total_conv_size2, shape=(1, n_filters, *conv_size2),
     thresh=-64.0, traces=True, theta_plus=0.05, refrac=0
 )
 conv_conn2 = Conv2dConnection(
@@ -159,9 +161,9 @@ conv_conn2 = Conv2dConnection(
     norm=0.5 * int(np.sqrt(total_kernel_size2)), nu=(0, 1e-2), wmax=2.0
 )
 
-print(conv_conn2.w.shape)
-
-w = -inhib * torch.ones(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
+w = -inhib * torch.ones(
+    1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1]
+)
 for f in range(n_filters):
     for i in range(conv_size[0]):
         for j in range(conv_size[1]):
@@ -170,12 +172,12 @@ for f in range(n_filters):
 recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
 w = -inhib * torch.ones(
-    n_filters, n_filters, conv_size2[0], conv_size2[1], n_filters, n_filters, conv_size2[0], conv_size2[1]
+    1, n_filters, conv_size2[0], conv_size2[1], 1, n_filters, conv_size2[0], conv_size2[1]
 )
 for f in range(n_filters):
     for i in range(conv_size2[0]):
         for j in range(conv_size2[1]):
-            w[f, f, i, j, f, f, i, j] = 0
+            w[0, f, i, j, 0, f, i, j] = 0
 
 recurrent_conn2 = Connection(conv_layer2, conv_layer2, w=w)
 
