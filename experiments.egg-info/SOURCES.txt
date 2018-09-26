@@ -38,7 +38,9 @@ scripts/misc/poster_example.py
 scripts/misc/real_input.py
 scripts/misc/weight_decay.py
 scripts/mnist/__init__.py
+scripts/mnist/bern_crop_locally_connected.py
 scripts/mnist/conv.py
+scripts/mnist/conv_dense.py
 scripts/mnist/crop_locally_connected.py
 scripts/mnist/diehl_and_cook_2015.py
 scripts/mnist/locally_connected.py
