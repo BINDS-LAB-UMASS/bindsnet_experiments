@@ -2,11 +2,11 @@
 
 for seed in 0
 do
-    for kernel_size in 8 10 12 14 16
+    for kernel_size in 12 14 16
     do
         for stride in 2 4
         do
-            for n_filters in 25 49 81 121 169 225
+            for n_filters in 49 100 144
             do
                 for crop in 4
                 do
