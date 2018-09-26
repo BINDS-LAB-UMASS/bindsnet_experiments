@@ -105,16 +105,16 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
     'No. examples must be divisible by update_interval'
 
 params = [
-    seed, kernel_size, stride, n_filters, crop, max_prob, n_train, inhib, time, dt,
-    theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
+    seed, kernel_size, stride, n_filters, crop, max_prob, n_train, inhib, time,
+    dt, theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, kernel_size, stride, n_filters, crop, max_prob, n_train, n_test, inhib, time, dt,
-        theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
+        seed, kernel_size, stride, n_filters, crop, max_prob, n_train, n_test, inhib, time,
+        dt, theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
     ]
 
 np.random.seed(seed)
@@ -147,6 +147,8 @@ else:
     network.connections[('X', 'Y')].update_rule = NoOp(
         connection=network.connections[('X', 'Y')], nu=network.connections[('X', 'Y')].nu
     )
+    network.layers['Y'].theta_decay = 0
+    network.layers['Y'].theta_plus = 0
 
 conv_size = network.connections[('X', 'Y')].conv_size
 locations = network.connections[('X', 'Y')].locations
