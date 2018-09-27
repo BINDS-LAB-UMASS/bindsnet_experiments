@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import argparse
 import numpy as np
@@ -6,16 +7,18 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 
-from scripts.utils import print_results, update_curves
+sys.path.append('..')
+
+from utils import print_results, update_curves
 
 from bindsnet.datasets import CIFAR10
 from bindsnet.network import Network
-from bindsnet.learning import PostPre, Hebbian
+from bindsnet.learning import Hebbian
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.nodes import Input, DiehlAndCookNodes
 from bindsnet.evaluation import update_ngram_scores, assign_labels
-from bindsnet.network.topology import Connection, Conv2dConnection
+from bindsnet.network.topology import Conv2dConnection, SparseConnection
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
 
 print()
@@ -121,11 +124,16 @@ conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, s
 conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
                               update_rule=None, nu=(0, 1e-3), wmax=2.0)
 
-w = -inhib * torch.ones(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
+w = torch.ones(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
 for f in range(n_filters):
     for i in range(conv_size[0]):
         for j in range(conv_size[1]):
             w[0, f, i, j, 0, f, i, j] = 0
+
+w = w.view(conv_layer.n, conv_layer.n)
+i = w.nonzero()
+v = -inhib * torch.ones(i.shape[0])
+w = torch.sparse.FloatTensor(i.t(), v, w.size())
 
 # for fltr1 in range(n_filters):
 #     for fltr2 in range(n_filters):
@@ -155,7 +163,7 @@ for f in range(n_filters):
         #                 for j2 in range(conv_size):
         #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
 
-recurrent_conn = Connection(conv_layer, conv_layer, w=w)
+recurrent_conn = SparseConnection(conv_layer, conv_layer, w=w)
 
 network.add_layer(input_layer, name='X')
 network.add_layer(conv_layer, name='Y')

@@ -1,0 +1,18 @@
+Metadata-Version: 2.1
+Name: scripts
+Version: 0.1
+Summary: Experiments with BindsNET spiking neural network simulator
+Home-page: http://github.com/djsaunde/bindsnet_experiments
+Author: Daniel Saunders
+Author-email: djsaunde@cs.umass.edu
+License: AGPL-3.0
+Download-URL: https://github.com/djsaunde/bindsnet_experiments/archive/0.1.tar.gz
+Description: # BindsNET Experiments
+        
+        Collection of experimental Python and accompanying Bash scripts for training and evaluation of BindsNET networks.
+        Created for BINDS Lab experiments, specifically geared towards the
+        [swarm2](https://people.cs.umass.edu/~swarm/index.php?n=Main.NewSwarmDoc) and
+        [gypsum](http://maxwell.cs.umass.edu/gypsum/index.php?n=Main.UserDoc) clusters. 
+        
+Platform: UNKNOWN
+Description-Content-Type: text/markdown
