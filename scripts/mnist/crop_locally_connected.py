@@ -141,6 +141,8 @@ else:
     network.connections[('X', 'Y')].update_rule = NoOp(
         connection=network.connections[('X', 'Y')], nu=network.connections[('X', 'Y')].nu
     )
+    network.layers['Y'].theta_decay = 0
+    network.layers['Y'].theta_plus = 0
 
 conv_size = network.connections[('X', 'Y')].conv_size
 locations = network.connections[('X', 'Y')].locations
