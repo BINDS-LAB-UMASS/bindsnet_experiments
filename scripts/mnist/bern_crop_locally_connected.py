@@ -302,7 +302,7 @@ else:
 # Update and print accuracy evaluations.
 curves, preds = update_curves(
     curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-    proportions=proportions, ngram_scores=ngram_scores, n=2
+    proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
 )
 print_results(curves)
 
