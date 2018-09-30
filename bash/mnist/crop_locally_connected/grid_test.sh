@@ -26,9 +26,9 @@ do
                                             do
                                                 for norm in 0.25
                                                 do
-                                                    sbatch submit.sh $seed $kernel_size $stride $n_filters $crop \
-                                                                     $n_train $n_test $inhib $time $theta_plus \
-                                                                     $theta_decay $intensity $norm
+                                                    sbatch test.sh $seed $kernel_size $stride $n_filters $crop \
+                                                                   $n_train $n_test $inhib $time $theta_plus \
+                                                                   $theta_decay $intensity $norm
                                                 done
                                             done
                                         done
