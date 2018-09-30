@@ -19,6 +19,7 @@ setup(
     zip_safe=False,
     download_url='https://github.com/djsaunde/bindsnet_experiments/archive/%s.tar.gz' % version,
     install_requires=[
-        'numpy>=1.14.2', 'torch>=0.4.1', 'matplotlib>=2.1.0', 'bindsnet>=0.1.7', 'PyYAML', 'tqdm', 'paramiko'
+        'numpy>=1.14.2', 'torch>=0.4.1', 'matplotlib>=2.1.0', 'bindsnet>=0.1.7', 'PyYAML', 'tqdm', 'paramiko',
+        'scikit-learn'
     ],
 )

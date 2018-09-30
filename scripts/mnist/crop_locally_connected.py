@@ -88,7 +88,7 @@ model = 'crop_locally_connected'
 data = 'mnist'
 
 top_level = os.path.join('..', '..')
-data_path = os.path.join(top_level, 'data', 'Breakout')
+data_path = os.path.join(top_level, 'data', 'MNIST')
 params_path = os.path.join(top_level, 'params', data, model)
 curves_path = os.path.join(top_level, 'curves', data, model)
 results_path = os.path.join(top_level, 'results', data, model)
@@ -154,7 +154,7 @@ voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
 network.add_monitor(voltage_monitor, name='output_voltage')
 
 # Load MNIST data.
-dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
+dataset = MNIST(path=data_path, download=True)
 
 if train:
     images, labels = dataset.get_train()
