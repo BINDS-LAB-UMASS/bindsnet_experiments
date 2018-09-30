@@ -267,11 +267,11 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'seed,n_hidden,n_train,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_train,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
             )
         else:
             f.write(
-                'seed,n_hidden,n_train,n_test,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_train,n_test,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:

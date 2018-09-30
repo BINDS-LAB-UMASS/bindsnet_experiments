@@ -63,6 +63,37 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             w = network.connections[('X', 'Y')].w
             plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, side_length)
 
+        elif model in ['backprop']:
+            w = network.connections['X', 'Y'].w
+            weights = [
+                w[:, i].view(28, 28) for i in range(10)
+            ]
+            w = torch.zeros(5 * 28, 2 * 28)
+            for i in range(5):
+                for j in range(2):
+                    w[i * 28: (i + 1) * 28, j * 28: (j + 1) * 28] = weights[i + j * 5]
+
+            plot_weights(w, wmin=-1, wmax=1)
+
+        elif model in ['two_layer_backprop']:
+            params = param_string.split('_')
+            sqrt = int(np.ceil(np.sqrt(int(params[1]))))
+
+            w = network.connections['Y', 'Z'].w
+            weights = [
+                w[:, i].view(sqrt, sqrt) for i in range(10)
+            ]
+            w = torch.zeros(5 * sqrt, 2 * sqrt)
+            for i in range(5):
+                for j in range(2):
+                    w[i * sqrt: (i + 1) * sqrt, j * sqrt: (j + 1) * sqrt] = weights[i + j * 5]
+
+            plot_weights(w, wmin=-1, wmax=1)
+
+            w = network.connections['X', 'Y'].w
+            square_weights = get_square_weights(w, sqrt, 28)
+            plot_weights(square_weights, wmin=-1, wmax=1)
+
     elif data in ['breakout']:
         if model in ['crop', 'rebalance', 'two_level']:
             params = param_string.split('_')
@@ -76,6 +107,19 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
 
             w = get_square_weights(w, n_sqrt, side)
             plot_weights(w)
+
+    elif data in ['fashion_mnist']:
+        if model in ['backprop']:
+            w = network.connections['X', 'Y'].w
+            weights = [
+                w[:, i].view(28, 28) for i in range(10)
+            ]
+            w = torch.zeros(5 * 28, 2 * 28)
+            for i in range(5):
+                for j in range(2):
+                    w[i * 28: (i + 1) * 28, j * 28: (j + 1) * 28] = weights[i + j * 5]
+
+            plot_weights(w, wmin=-1, wmax=1)
 
     path = os.path.join('..', 'plots', data, model, 'weights')
     if not os.path.isdir(path):
