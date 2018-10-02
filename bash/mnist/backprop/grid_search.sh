@@ -6,11 +6,11 @@ do
     do
         for n_test in 10000
         do
-            for time in 10 25 50
+            for time in 10 25 50 75 100
             do
-                for lr in 0.005 0.0075 0.01 0.025
+                for lr in 0.001 0.005 0.0075 0.01
                 do
-                    for lr_decay in 0.9 0.95 0.99 0.995 1.0
+                    for lr_decay in 0.93 0.94 0.95 0.96 0.97
                     do
                         for update_interval in 500
                         do
