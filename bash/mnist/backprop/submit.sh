@@ -21,8 +21,8 @@ source activate py36
 
 echo $seed $n_train $n_test $time $lr $lr_decay $update_interval $max_prob
 
-python crop_locally_connected.py --train --seed $seed --n_train $n_train --n_test $n_test --time $time --lr $lr \
-                                 --lr_decay $lr_decay --update_interval $update_interval --max_prob $max_prob
-python crop_locally_connected.py --test --seed $seed --n_train $n_train --n_test $n_test --time $time --lr $lr \
-                                 --lr_decay $lr_decay --update_interval $update_interval --max_prob $max_prob
+python backprop.py --train --seed $seed --n_train $n_train --n_test $n_test --time $time --lr $lr \
+                   --lr_decay $lr_decay --update_interval $update_interval --max_prob $max_prob
+python backprop.py --test --seed $seed --n_train $n_train --n_test $n_test --time $time --lr $lr \
+                   --lr_decay $lr_decay --update_interval $update_interval --max_prob $max_prob
 exit

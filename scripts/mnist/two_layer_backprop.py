@@ -26,7 +26,6 @@ parser.add_argument('--time', default=25, type=int)
 parser.add_argument('--lr', default=0.01, type=float)
 parser.add_argument('--lr_decay', default=0.9, type=float)
 parser.add_argument('--update_interval', default=500, type=int)
-parser.add_argument('--max_prob', default=1.0, type=float)
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
@@ -42,7 +41,6 @@ time = args.time  # simulation time
 lr = args.lr  # learning rate
 lr_decay = args.lr_decay  # learning rate decay
 update_interval = args.update_interval  # no. examples between evaluation
-max_prob = args.max_prob  # maximum probability of input spikes
 plot = args.plot  # visualize spikes + connection weights
 train = args.train  # train or test mode
 gpu = args.gpu  # whether to use gpu or cpu tensors
@@ -63,14 +61,14 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, n_hidden, n_train, time, lr, lr_decay, update_interval, max_prob
+    seed, n_hidden, n_train, time, lr, lr_decay, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, n_hidden, n_train, n_test, time, lr, lr_decay, update_interval, max_prob
+        seed, n_hidden, n_train, n_test, time, lr, lr_decay, update_interval
     ]
 
 np.random.seed(seed)
@@ -164,7 +162,7 @@ for i, (image, label) in enumerate(zip(images, labels)):
     network.run(inpts=inpts, time=time)
 
     # Retrieve spikes and summed inputs from both layers.
-    spikes = {l: network.monitors[l].get('s') for l in network.layers}
+    spikes = {l: network.monitors[l].get('s') for l in network.layers if not '_b' in l}
     summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
 
     # Compute softmax of output spiking activity and get predicted label.
@@ -289,11 +287,11 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'seed,n_hidden,n_train,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,n_train,time,lr,lr_decay,update_interval,mean_accuracy,max_accuracy\n'
             )
         else:
             f.write(
-                'seed,n_hidden,n_train,n_test,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,n_train,n_test,time,lr,lr_decay,update_interval,mean_accuracy,max_accuracy\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:
