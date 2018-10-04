@@ -19,10 +19,10 @@ update_interval=${8:-500}
 cd ../../../scripts/mnist/
 source activate py36
 
-echo $seed $n_train $n_test $time $lr $lr_decay $update_interval
+echo $seed $n_hidden $n_train $n_test $time $lr $lr_decay $update_interval
 
-python two_layer_backprop.py --train --seed $seed --n_train $n_train --n_test $n_test --time $time \
+python two_layer_backprop.py --train --seed $seed --n_hidden $n_hidden --n_train $n_train --n_test $n_test --time $time \
                              --lr $lr --lr_decay $lr_decay --update_interval $update_interval
-python two_layer_backprop.py --test --seed $seed --n_train $n_train --n_test $n_test --time $time \
+python two_layer_backprop.py --test --seed $seed --n_hidden $n_hidden --n_train $n_train --n_test $n_test --time $time \
                              --lr $lr --lr_decay $lr_decay --update_interval $update_interval
 exit
