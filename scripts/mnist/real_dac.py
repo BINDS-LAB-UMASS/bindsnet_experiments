@@ -8,12 +8,13 @@ import matplotlib.pyplot as plt
 from time import time as t
 
 from bindsnet.datasets import MNIST
-from bindsnet.encoding import poisson
-from bindsnet.network import load_network
-from bindsnet.models import DiehlAndCook2015
+from bindsnet.learning import PostPre, NoOp
 from bindsnet.network.monitors import Monitor
-from bindsnet.utils import get_square_weights, get_square_assignments
+from bindsnet.network.topology import Connection
+from bindsnet.network import load_network, Network
+from bindsnet.network.nodes import RealInput, DiehlAndCookNodes
 from bindsnet.evaluation import assign_labels, update_ngram_scores
+from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
 sys.path.append('..')
@@ -26,13 +27,12 @@ parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--excite', type=float, default=22.5)
-parser.add_argument('--inhib', type=float, default=50)
-parser.add_argument('--time', type=int, default=350)
+parser.add_argument('--inhib', type=float, default=100)
+parser.add_argument('--time', type=int, default=50)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
-parser.add_argument('--intensity', type=float, default=0.5)
-parser.add_argument('--X_Ae_decay', type=float, default=0.5)
+parser.add_argument('--intensity', type=float, default=1e-3)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--train', dest='train', action='store_true')
@@ -54,7 +54,6 @@ dt = args.dt
 theta_plus = args.theta_plus
 theta_decay = args.theta_decay
 intensity = args.intensity
-X_Ae_decay = args.X_Ae_decay
 progress_interval = args.progress_interval
 update_interval = args.update_interval
 train = args.train
@@ -69,20 +68,20 @@ for key, value in args.items():
 
 print()
 
-model = 'diehl_and_cook_2015'
+model = 'real_dac'
 data = 'mnist'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, n_neurons, n_train, inhib, time, dt, theta_plus, theta_decay,
-    intensity, progress_interval, update_interval, X_Ae_decay
+    seed, n_neurons, n_train, inhib, time, theta_plus, theta_decay,
+    intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, n_neurons, n_train, n_test, inhib, time, dt, theta_plus,
-    theta_decay, intensity, progress_interval, update_interval, X_Ae_decay
+    seed, n_neurons, n_train, n_test, inhib, time, theta_plus,
+    theta_decay, intensity, progress_interval, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
@@ -101,19 +100,42 @@ else:
     n_examples = n_test
 
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
-start_intensity = intensity
 n_classes = 10
 
 # Build network.
 if train:
-    network = DiehlAndCook2015(
-        n_inpt=784, n_neurons=n_neurons, exc=excite, inh=inhib, dt=dt, norm=78.4, theta_plus=0.05
+    network = Network(dt=dt)
+
+    input_layer = RealInput(n=784, traces=True, trace_tc=5e-2)
+    network.add_layer(input_layer, name='X')
+
+    output_layer = DiehlAndCookNodes(
+        n=n_neurons, traces=True, rest=-65.0, reset=-60.0, thresh=-52.0, refrac=5,
+        decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
     )
+    network.add_layer(output_layer, name='Y')
+
+    w = 0.3 * torch.rand(784, n_neurons)
+    input_connection = Connection(
+        source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=PostPre,
+        nu=(1e-4, 1e-1), wmin=0, wmax=1, norm=78.4
+    )
+    network.add_connection(input_connection, source='X', target='Y')
+
+    w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
+    recurrent_connection = Connection(
+        source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
+    )
+    network.add_connection(recurrent_connection, source='Y', target='Y')
 
 else:
     path = os.path.join('..', '..', 'params', data, model)
     network = load_network(os.path.join(path, model_name + '.pt'))
-    network.connections[('X', 'Ae')].update_rule = None
+    network.connections[('X', 'Y')].update_rule = NoOp(
+        connection=network.connections[('X', 'Y')], nu=network.connections[('X', 'Y')].nu
+    )
+    network.layers['Y'].theta_decay = 0
+    network.layers['Y'].theta_plus = 0
 
 # Load MNIST data.
 dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
@@ -123,8 +145,11 @@ if train:
 else:
     images, labels = dataset.get_test()
 
-images = images.view(-1, 784)
-images *= intensity
+images = images.view(-1, 784) * intensity
+
+# if train:
+#     for i in range(n_neurons):
+#         network.connections['X', 'Y'].w[:, i] = images[i] + images[i].mean() * torch.randn(784)
 
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, time, n_neurons)
@@ -209,38 +234,36 @@ for i in range(n_examples):
         print()
 
     # Get next input sample.
-    image = images[i]
-    sample = poisson(datum=image, time=time)
-    inpts = {'X': sample}
+    image = images[i].repeat([time, 1])
+    inpts = {'X': image}
 
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
 
     retries = 0
-    while spikes['Ae'].get('s').sum() < 5 and retries < 3:
+    while spikes['Y'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
-        sample = poisson(datum=image, time=time)
-        inpts = {'X': sample}
+        inpts = {'X': image}
         network.run(inpts=inpts, time=time)
 
     # Add to spikes recording.
-    spike_record[i % update_interval] = spikes['Ae'].get('s').t()
+    spike_record[i % update_interval] = spikes['Y'].get('s').t()
 
     # Optionally plot various simulation information.
     if plot:
         _input = images[i].view(28, 28)
         reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
         _spikes = {layer: spikes[layer].get('s') for layer in spikes}
-        input_exc_weights = network.connections[('X', 'Ae')].w
+        input_exc_weights = network.connections['X', 'Y'].w
         square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
         square_assignments = get_square_assignments(assignments, n_sqrt)
 
-        inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+        # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
         spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
         weights_im = plot_weights(square_weights, im=weights_im)
-        assigns_im = plot_assignments(square_assignments, im=assigns_im)
-        perf_ax = plot_performance(curves, ax=perf_ax)
+        # assigns_im = plot_assignments(square_assignments, im=assigns_im)
+        # perf_ax = plot_performance(curves, ax=perf_ax)
 
         plt.pause(1e-8)
 
@@ -327,12 +350,12 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,inhib,time,timestep,theta_plus,theta_decay,intensity,'
-                    'progress_interval,update_interval,X_Ae_decay,mean_all_activity,mean_proportion_weighting,'
+            f.write('random_seed,n_neurons,n_train,inhib,time,theta_plus,theta_decay,intensity,'
+                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,timestep,theta_plus,theta_decay,intensity,'
-                    'progress_interval,update_interval,X_Ae_decay,mean_all_activity,mean_proportion_weighting,'
+            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,theta_plus,theta_decay,intensity,'
+                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
 
 with open(os.path.join(path, name), 'a') as f:
