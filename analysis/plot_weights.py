@@ -94,6 +94,9 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             square_weights = get_square_weights(w, sqrt, 28)
             plot_weights(square_weights, wmin=-1, wmax=1)
 
+        else:
+            raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
+
     elif data in ['breakout']:
         if model in ['crop', 'rebalance', 'two_level']:
             params = param_string.split('_')
@@ -108,6 +111,21 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             w = get_square_weights(w, n_sqrt, side)
             plot_weights(w)
 
+        elif model in ['backprop']:
+            w = network.connections['X', 'Y'].w
+            weights = [
+                w[:, i].view(50, 72) for i in range(4)
+            ]
+            w = torch.zeros(2 * 50, 2 * 72)
+            for j in range(2):
+                for k in range(2):
+                    w[j * 50: (j + 1) * 50, k * 72: (k + 1) * 72] = weights[j + k * 2]
+
+            weights_im = plot_weights(w)
+
+        else:
+            raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
+
     elif data in ['fashion_mnist']:
         if model in ['backprop']:
             w = network.connections['X', 'Y'].w
@@ -121,11 +139,34 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
 
             plot_weights(w, wmin=-1, wmax=1)
 
+        else:
+            raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
+
+    if data in ['cifar10']:
+        if model in ['backprop']:
+            wmin = network.connections['X', 'Y'].wmin
+            wmax = network.connections['X', 'Y'].wmax
+
+            w = network.connections['X', 'Y'].w
+            weights = [w[:, i].view(32, 32, 3).mean(2) for i in range(10)]
+            w = torch.zeros(5 * 32, 2 * 32)
+            for i in range(5):
+                for j in range(2):
+                    w[i * 32: (i + 1) * 32, j * 32: (j + 1) * 32] = weights[i + j * 5]
+
+            plot_weights(w, wmin=wmin, wmax=wmax)
+
+        else:
+            raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
+
     path = os.path.join('..', 'plots', data, model, 'weights')
     if not os.path.isdir(path):
         os.makedirs(path)
 
     plt.savefig(os.path.join(path, f'{param_string}.png'))
+
+    plt.ioff()
+    plt.show()
 
 
 if __name__ == '__main__':

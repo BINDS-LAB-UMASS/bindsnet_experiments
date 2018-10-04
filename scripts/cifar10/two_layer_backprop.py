@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
-from bindsnet.datasets import MNIST
-from bindsnet.network import Network, load_network
+from bindsnet.datasets import CIFAR10
 from bindsnet.utils import get_square_weights
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.topology import Connection
+from bindsnet.network import Network, load_network
 from bindsnet.network.nodes import RealInput, IFNodes
 from bindsnet.analysis.plotting import plot_spikes, plot_weights
 
@@ -23,8 +23,8 @@ parser.add_argument('--n_hidden', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--time', default=25, type=int)
-parser.add_argument('--lr', default=0.01, type=float)
-parser.add_argument('--lr_decay', default=0.9, type=float)
+parser.add_argument('--lr', default=1e-2, type=float)
+parser.add_argument('--lr_decay', default=0.95, type=float)
 parser.add_argument('--update_interval', default=500, type=int)
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
@@ -54,7 +54,7 @@ for key, value in args.items():
 
 print()
 
-data = 'mnist'
+data = 'cifar10'
 model = 'two_layer_backprop'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -81,7 +81,7 @@ else:
 
 # Paths.
 top_level = os.path.join('..', '..')
-data_path = os.path.join(top_level, 'data', 'MNIST')
+data_path = os.path.join(top_level, 'data', 'CIFAR10')
 params_path = os.path.join(top_level, 'params', data, model)
 curves_path = os.path.join(top_level, 'curves', data, model)
 results_path = os.path.join(top_level, 'results', data, model)
@@ -100,7 +100,7 @@ if train:
     network = Network()
 
     # Groups of neurons.
-    input_layer = RealInput(n=784, sum_input=True)
+    input_layer = RealInput(n=32*32*3, sum_input=True)
     hidden_layer = IFNodes(n=n_hidden, sum_input=True)
     hidden_bias = RealInput(n=1, sum_input=True)
     output_layer = IFNodes(n=10, sum_input=True)
@@ -128,8 +128,8 @@ if train:
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
 
-# Load MNIST data.
-dataset = MNIST(path=data_path, download=True, shuffle=True)
+# Load CIFAR-10 data.
+dataset = CIFAR10(path=data_path, download=True, shuffle=True)
 
 if train:
     images, labels = dataset.get_train()
@@ -137,7 +137,7 @@ else:
     images, labels = dataset.get_test()
 
 images, labels = images[:n_examples], labels[:n_examples]
-images, labels = iter(images.view(-1, 784) / 255), iter(labels)
+images, labels = iter(images.view(-1, 32*32*3) / 255000), iter(labels)
 
 grads = {}
 accuracies = []
@@ -161,7 +161,7 @@ for i, (image, label) in enumerate(zip(images, labels)):
 
     # Retrieve spikes and summed inputs from both layers.
     spikes = {l: network.monitors[l].get('s') for l in network.layers if not '_b' in l}
-    summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
+    summed_inputs = {l: network.layers[l].summed for l in network.layers}
 
     # Compute softmax of output spiking activity and get predicted label.
     output = summed_inputs['Z'].softmax(0).view(1, -1)
@@ -185,11 +185,10 @@ for i, (image, label) in enumerate(zip(images, labels)):
         grads['dl/db2'] = grads['dl/df2']
         grads['dl/dw1'] = torch.ger(summed_inputs['X'], network.connections['Y', 'Z'].w @ grads['dl/df2'])
         grads['dl/db1'] = network.connections['Y', 'Z'].w @ grads['dl/df2']
-        grads['dl/df1'] =
 
         # Do stochastic gradient descent calculation.
-        network.connections['X', 'Y'].w -= lr * grads['dl/dw1']
-        network.connections['Y_b', 'Y'].w -= lr * grads['dl/db1']
+        network.connections['X', 'Y'].w -= 500 * lr * grads['dl/dw1']
+        network.connections['Y_b', 'Y'].w -= 500 * lr * grads['dl/db1']
         network.connections['Y', 'Z'].w -= lr * grads['dl/dw2']
         network.connections['Z_b', 'Z'].w -= lr * grads['dl/db2']
 
@@ -211,12 +210,12 @@ for i, (image, label) in enumerate(zip(images, labels)):
         print(f'Last accuracy: {accuracies[-1]:.3f}')
         print(f'Average accuracy: {np.mean(accuracies):.3f}')
 
-        if train:
-            # Decay learning rate.
-            lr *= lr_decay
+        # Decay learning rate.
+        lr *= lr_decay
 
-            print(f'Best accuracy: {best:.4f}')
-            print(f'Current learning rate: {lr:.4f}')
+        if train:
+            print(f'Best accuracy: {best:.3f}')
+            print(f'Current learning rate: {lr:.3f}')
 
         start = t()
 
@@ -234,10 +233,12 @@ for i, (image, label) in enumerate(zip(images, labels)):
         weights1_im = plot_weights(w, im=weights1_im, wmin=-1, wmax=1)
 
         w = network.connections['X', 'Y'].w
-        square_weights = get_square_weights(w, sqrt, 28)
+        w = w.view(32, 32, 3, n_hidden).mean(2).view(32*32, n_hidden)
+
+        square_weights = get_square_weights(w, sqrt, 32)
         weights2_im = plot_weights(square_weights, im=weights2_im, wmin=-1, wmax=1)
 
-        plt.pause(1e-8)
+        plt.pause(1e-1)
 
     network.reset_()  # Reset state variables.
 
