@@ -132,8 +132,7 @@ voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
 network.add_monitor(voltage_monitor, name='output_voltage')
 
 # Load MNIST data.
-dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'),
-                download=True)
+dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
 
 if train:
     images, labels = dataset.get_train()
