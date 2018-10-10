@@ -2,7 +2,7 @@
 #
 #SBATCH --partition=longq
 #SBATCH --time=03-00:00:00
-#SBATCH --mem=12000
+#SBATCH --mem=32000
 #SBATCH --account=rkozma
 #SBATCH --output=../../output/diehl_and_cook_2015_fashion_mnist_%j.out
 #SBATCH --cpus-per-task=8
@@ -16,19 +16,19 @@ time=${6:-350}
 theta_plus=${7:-0.05}
 theta_decay=${8:-1e-7}
 intensity=${9:-0.5}
-norm=${10:-100}
+norm=${10:-100.0}
 
 cd ../../../scripts/fashion_mnist/
 source activate py36
 
-echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity norm
+echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity $norm
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
 							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --norm norm
+							  --intensity $intensity --norm $norm
 python diehl_and_cook_2015.py --test --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \
 							  --theta_plus $theta_plus --theta_decay $theta_decay \
-							  --intensity $intensity --norm norm
+							  --intensity $intensity --norm $norm
 exit
