@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
-from bindsnet.datasets import MNIST
+from bindsnet.datasets import CIFAR10
 from bindsnet.network import Network, load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.topology import Connection
@@ -21,10 +21,12 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--time', default=25, type=int)
-parser.add_argument('--lr', default=0.01, type=float)
+parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--lr_decay', default=0.95, type=float)
+parser.add_argument('--wmin', default=-1, type=float)
+parser.add_argument('--wmax', default=1, type=float)
+parser.add_argument('--norm', default=1000.0, type=float)
 parser.add_argument('--update_interval', default=500, type=int)
-parser.add_argument('--max_prob', default=1.0, type=float)
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
@@ -38,8 +40,10 @@ n_test = args.n_test  # no. of test samples
 time = args.time  # simulation time
 lr = args.lr  # learning rate
 lr_decay = args.lr_decay  # learning rate decay
+wmin = args.wmin  # minimum connection strength
+wmax = args.wmax  # maximum connection strength
+norm = args.norm  # total synaptic weight per output layer neuron
 update_interval = args.update_interval  # no. examples between evaluation
-max_prob = args.max_prob  # maximum probability of input spikes
 plot = args.plot  # visualize spikes + connection weights
 train = args.train  # train or test mode
 gpu = args.gpu  # whether to use gpu or cpu tensors
@@ -53,21 +57,21 @@ for key, value in args.items():
 
 print()
 
-data = 'mnist'
+data = 'cifar10'
 model = 'backprop'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, n_train, time, lr, lr_decay, update_interval, max_prob
+    seed, n_train, time, lr, lr_decay, wmin, wmax, norm, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, n_train, n_test, time, lr, lr_decay, update_interval, max_prob
+        seed, n_train, n_test, time, lr, lr_decay, wmin, wmax, norm, update_interval
     ]
 
 np.random.seed(seed)
@@ -80,7 +84,7 @@ else:
 
 # Paths.
 top_level = os.path.join('..', '..')
-data_path = os.path.join(top_level, 'data', 'MNIST')
+data_path = os.path.join(top_level, 'data', 'CIFAR10')
 params_path = os.path.join(top_level, 'params', data, model)
 curves_path = os.path.join(top_level, 'curves', data, model)
 results_path = os.path.join(top_level, 'results', data, model)
@@ -98,7 +102,7 @@ if train:
     network = Network()
 
     # Groups of neurons.
-    input_layer = RealInput(n=784, sum_input=True)
+    input_layer = RealInput(n=32*32*3, sum_input=True)
     output_layer = IFNodes(n=10, sum_input=True)
     bias = RealInput(n=1, sum_input=True)
     network.add_layer(input_layer, name='X')
@@ -106,7 +110,7 @@ if train:
     network.add_layer(bias, name='Y_b')
 
     # Connections between groups of neurons.
-    input_connection = Connection(source=input_layer, target=output_layer, norm=150, wmin=-1, wmax=1)
+    input_connection = Connection(source=input_layer, target=output_layer, norm=norm, wmin=wmin, wmax=wmax)
     bias_connection = Connection(source=bias, target=output_layer)
     network.add_connection(input_connection, source='X', target='Y')
     network.add_connection(bias_connection, source='Y_b', target='Y')
@@ -118,8 +122,8 @@ if train:
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
 
-# Load MNIST data.
-dataset = MNIST(path=data_path, download=True, shuffle=True)
+# Load CIFAR-10 data.
+dataset = CIFAR10(path=data_path, download=True, shuffle=True)
 
 if train:
     images, labels = dataset.get_train()
@@ -127,7 +131,7 @@ else:
     images, labels = dataset.get_test()
 
 images, labels = images[:n_examples], labels[:n_examples]
-images, labels = iter(images.view(-1, 784) / 255), iter(labels)
+images, labels = iter(images.view(-1, 32*32*3) / 255), iter(labels)
 
 grads = {}
 accuracies = []
@@ -150,7 +154,7 @@ for i, (image, label) in enumerate(zip(images, labels)):
     network.run(inpts=inpts, time=time)
 
     # Retrieve spikes and summed inputs from both layers.
-    spikes = {l: network.monitors[l].get('s') for l in network.layers}
+    spikes = {l: network.monitors[l].get('s') for l in network.layers if '_b' not in l}
     summed_inputs = {l: network.layers[l].summed for l in network.layers}
 
     # Compute softmax of output spiking activity and get predicted label.
@@ -208,15 +212,15 @@ for i, (image, label) in enumerate(zip(images, labels)):
     if plot:
         w = network.connections['X', 'Y'].w
         weights = [
-            w[:, i].view(28, 28) for i in range(10)
+            w[:, i].view(32, 32, 3).mean(2) for i in range(10)
         ]
-        w = torch.zeros(5*28, 2*28)
-        for i in range(5):
-            for j in range(2):
-                w[i*28: (i+1)*28, j*28: (j+1)*28] = weights[i + j * 5]
+        w = torch.zeros(5*32, 2*32)
+        for j in range(5):
+            for k in range(2):
+                w[j*32: (j+1)*32, k*32: (k+1)*32] = weights[j + k * 5]
 
         spike_ims, spike_axes = plot_spikes(spikes, ims=spike_ims, axes=spike_axes)
-        weights_im = plot_weights(w, im=weights_im, wmin=-1, wmax=1)
+        weights_im = plot_weights(w, im=weights_im, wmin=wmin, wmax=wmax)
 
         plt.pause(1e-1)
 
@@ -267,11 +271,11 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'seed,n_train,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_train,time,lr,lr_decay,update_interval,wmin,wmax,norm,mean_accuracy,max_accuracy\n'
             )
         else:
             f.write(
-                'seed,n_train,n_test,time,lr,lr_decay,update_interval,max_prob,mean_accuracy,max_accuracy\n'
+                'seed,n_train,n_test,time,lr,lr_decay,update_interval,wmin,wmax,norm,mean_accuracy,max_accuracy\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:

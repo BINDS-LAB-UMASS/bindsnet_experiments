@@ -16,7 +16,7 @@ lr_decay=${6:-0.99}
 update_interval=${7:-500}
 max_prob=${8:-1.0}
 
-cd ../../../scripts/fashion_mnist/
+cd ../../../experiments/fashion_mnist/
 source activate py36
 
 echo $seed $n_train $n_test $time $lr $lr_decay $update_interval $max_prob

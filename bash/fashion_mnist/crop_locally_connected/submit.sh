@@ -2,9 +2,9 @@
 #
 #SBATCH --partition=longq
 #SBATCH --time=02-00:00:00
-#SBATCH --mem=8000
+#SBATCH --mem=32000
 #SBATCH --account=rkozma
-#SBATCH --output=../../output/crop_locally_connected_%j.out
+#SBATCH --output=../../output/crop_locally_connected_fashion_mnist_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}
@@ -21,7 +21,7 @@ theta_decay=${11:-1e-7}
 intensity=${12:-0.5}
 norm=${13:-0.2}
 
-cd ../../../experiments/mnist/
+cd ../../../experiments/fashion_mnist/
 source activate py36
 
 echo $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity $norm

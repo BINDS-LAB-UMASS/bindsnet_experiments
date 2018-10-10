@@ -19,7 +19,7 @@ wmin=${9:-1.0}
 wmax=${10:1.0}
 norm=${11:500}
 
-cd ../../../scripts/breakout/
+cd ../../../experiments/breakout/
 source activate py36
 
 echo $seed $n_train $n_test $time $lr $lr_decay $update_interval $max_prob

@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 import argparse
 import numpy as np
@@ -7,19 +6,17 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 
-sys.path.append('..')
-
-from utils import print_results, update_curves
-
-from bindsnet.datasets import CIFAR10
+from bindsnet.datasets import MNIST
+from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.network import Network
-from bindsnet.learning import Hebbian
+from bindsnet.learning import PostPre
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
+from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes
-from bindsnet.evaluation import update_ngram_scores, assign_labels
-from bindsnet.network.topology import Conv2dConnection, SparseConnection
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
+
+from experiments.utils import print_results, update_curves
 
 print()
 
@@ -27,12 +24,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
-parser.add_argument('--kernel_size', type=int, nargs='+', default=[16])
-parser.add_argument('--stride', type=int, nargs='+', default=[4])
-parser.add_argument('--n_filters', type=int, default=25)
+parser.add_argument('--kernel_size', type=int, nargs='+', default=[12])
+parser.add_argument('--stride', type=int, nargs='+', default=[2])
+parser.add_argument('--kernel_size2', type=int, nargs='+', default=[8])
+parser.add_argument('--stride2', type=int, nargs='+', default=[1])
+parser.add_argument('--n_filters', type=int, default=9)
 parser.add_argument('--padding', type=int, default=0)
 parser.add_argument('--inhib', type=float, default=100.0)
-parser.add_argument('--time', type=int, default=100)
+parser.add_argument('--time', type=int, default=25)
 parser.add_argument('--dt', type=float, default=1.0)
 parser.add_argument('--intensity', type=float, default=1)
 parser.add_argument('--progress_interval', type=int, default=10)
@@ -50,6 +49,8 @@ n_train = args.n_train
 n_test = args.n_test
 kernel_size = args.kernel_size
 stride = args.stride
+kernel_size2 = args.kernel_size2
+stride2 = args.stride2
 n_filters = args.n_filters
 padding = args.padding
 inhib = args.inhib
@@ -66,6 +67,10 @@ if len(kernel_size) == 1:
     kernel_size = [kernel_size[0], kernel_size[0]]
 if len(stride) == 1:
     stride = [stride[0], stride[0]]
+if len(kernel_size2) == 1:
+    kernel_size2 = [kernel_size2[0], kernel_size2[0]]
+if len(stride2) == 1:
+    stride2 = [stride2[0], stride2[0]]
 
 args = vars(args)
 
@@ -75,20 +80,24 @@ for key, value in args.items():
 
 print()
 
-model = 'conv'
-data = 'cifar10'
+model = 'two_conv'
+data = 'mnist'
 
 assert n_train % update_interval == 0 and n_test % update_interval == 0, \
     'No. examples must be divisible by update_interval'
 
-params = [seed, n_train, kernel_size, stride, n_filters,
-          padding, inhib, time, dt, intensity, update_interval]
+params = [
+    seed, n_train, kernel_size, stride, kernel_size2, stride2,
+    n_filters, padding, inhib, time, dt, intensity, update_interval
+]
 
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
-    test_params = [seed, n_train, n_test, kernel_size, stride, n_filters,
-                   padding, inhib, time, dt, intensity, update_interval]
+    test_params = [
+        seed, n_train, n_test, kernel_size, stride, kernel_size2, stride2,
+        n_filters, padding, inhib, time, dt, intensity, update_interval
+    ]
 
 np.random.seed(seed)
 
@@ -99,85 +108,95 @@ else:
     torch.manual_seed(seed)
 
 n_examples = n_train if train else n_test
-input_shape = [32, 32, 3]
+input_shape = [28, 28]
 
 if kernel_size == input_shape:
     conv_size = [1, 1]
 else:
-    conv_size = (int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
-                 int((input_shape[1] - kernel_size[1]) / stride[1]) + 1)
+    conv_size = (
+        int((input_shape[0] - kernel_size[0]) / stride[0]) + 1, int((input_shape[1] - kernel_size[1]) / stride[1]) + 1
+    )
+
+if kernel_size2 == conv_size:
+    conv_size2 = [1, 1]
+else:
+    conv_size2 = (
+        int((conv_size[0] - kernel_size2[0]) / stride2[0]) + 1, int((conv_size[1] - kernel_size2[1]) / stride2[1]) + 1
+    )
 
 n_classes = 10
 n_neurons = n_filters * np.prod(conv_size)
 per_class = int(n_neurons / n_classes)
 total_kernel_size = int(np.prod(kernel_size))
+total_kernel_size2 = int(np.prod(kernel_size2))
 total_conv_size = int(np.prod(conv_size))
+total_conv_size2 = int(np.prod(conv_size2))
 
 # Build network.
 network = Network()
-input_layer = Input(n=32*32*3, shape=(1, 3, 32, 32), traces=True)
-conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
-                               thresh=-64.0, traces=True, theta_plus=0.05, refrac=0)
-conv_layer2 = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
-conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=Hebbian,
-                             norm=0.5 * int(np.sqrt(total_kernel_size)), nu=(1e-3, 1e-3), wmax=2.0)
-conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
-                              update_rule=None, nu=(0, 1e-3), wmax=2.0)
+input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
+conv_layer = DiehlAndCookNodes(
+    n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
+    thresh=-64.0, traces=True, theta_plus=0.05, refrac=0
+)
+conv_layer_ = DiehlAndCookNodes(
+    n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0, traces=True, theta_decay=5e-1
+)
+conv_conn = Conv2dConnection(
+    input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
+    norm=1.0 * int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0
+)
+conv_conn_ = Conv2dConnection(
+    input_layer, conv_layer_, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
+    update_rule=None, nu=(0, 1e-2), wmax=2.0
+)
+conv_layer2 = DiehlAndCookNodes(
+    n=n_filters * total_conv_size2, shape=(1, n_filters, *conv_size2),
+    thresh=-64.0, traces=True, theta_plus=0.05, refrac=0
+)
+conv_conn2 = Conv2dConnection(
+    conv_layer_, conv_layer2, kernel_size=kernel_size2, stride=stride2, update_rule=PostPre,
+    norm=1.0 * int(np.sqrt(total_kernel_size2)), nu=(0, 1e-2), wmax=2.0
+)
 
-w = torch.ones(1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1])
+w = -inhib * torch.ones(
+    1, n_filters, conv_size[0], conv_size[1], 1, n_filters, conv_size[0], conv_size[1]
+)
 for f in range(n_filters):
     for i in range(conv_size[0]):
         for j in range(conv_size[1]):
             w[0, f, i, j, 0, f, i, j] = 0
 
-w = w.view(conv_layer.n, conv_layer.n)
-i = w.nonzero()
-v = -inhib * torch.ones(i.shape[0])
-w = torch.sparse.FloatTensor(i.t(), v, w.size())
+w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
-# for fltr1 in range(n_filters):
-#     for fltr2 in range(n_filters):
-        # for i1 in range(conv_size):
-        #     for j1 in range(conv_size):
-        #         for i2 in range(conv_size):
-        #             for j2 in range(conv_size):
-        #                 if not (i1 == i2 and j1 == j2):
-        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
+w = -inhib * torch.ones(
+    1, n_filters, conv_size2[0], conv_size2[1], 1, n_filters, conv_size2[0], conv_size2[1]
+)
+for f in range(n_filters):
+    for i in range(conv_size2[0]):
+        for j in range(conv_size2[1]):
+            w[0, f, i, j, 0, f, i, j] = 0
 
-        # if fltr1 != fltr2:
-        #     for i in range(conv_size):
-        #         for j in range(conv_size):
-        #             w[0, fltr1, i, j, 0, fltr2, i, j] = -inhib
-
-        # for i1 in range(conv_size[0]):
-        #     for j1 in range(conv_size[1]):
-        #         for i2 in range(conv_size[0]):
-        #             for j2 in range(conv_size[1]):
-        #                 if not (fltr1 == fltr2 and i1 == i2 and j1 == j2):
-        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
-
-        # if fltr1 != fltr2:
-        #     for i1 in range(conv_size):
-        #         for j1 in range(conv_size):
-        #             for i2 in range(conv_size):
-        #                 for j2 in range(conv_size):
-        #                     w[0, fltr1, i1, j1, 0, fltr2, i2, j2] = -inhib
-
-recurrent_conn = SparseConnection(conv_layer, conv_layer, w=w)
+w = w.view(n_filters * conv_size2[0] * conv_size2[1], n_filters * conv_size2[0] * conv_size2[1])
+recurrent_conn2 = Connection(conv_layer2, conv_layer2, w=w)
 
 network.add_layer(input_layer, name='X')
 network.add_layer(conv_layer, name='Y')
-network.add_layer(conv_layer2, name='Y_')
+network.add_layer(conv_layer_, name='Y_')
+network.add_layer(conv_layer2, name='Z')
 network.add_connection(conv_conn, source='X', target='Y')
-network.add_connection(conv_conn2, source='X', target='Y_')
+network.add_connection(conv_conn_, source='X', target='Y_')
 network.add_connection(recurrent_conn, source='Y', target='Y')
+network.add_connection(conv_conn2, source='Y', target='Z')
+network.add_connection(recurrent_conn2, source='Z', target='Z')
 
 # Voltage recording for excitatory and inhibitory layers.
 voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
 network.add_monitor(voltage_monitor, name='output_voltage')
 
-# Load CIFAR-10 data.
-dataset = CIFAR10(path=os.path.join('..', '..', 'data', 'CIFAR10'), download=True)
+# Load MNIST data.
+dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
 
 if train:
     images, labels = dataset.get_train()
@@ -221,7 +240,8 @@ inpt_ims = None
 inpt_axes = None
 spike_ims = None
 spike_axes = None
-weights_im = None
+weights1_im= None
+weights2_im = None
 
 start = t()
 for i in range(n_examples):
@@ -233,7 +253,7 @@ for i in range(n_examples):
         if i % len(labels) == 0:
             current_labels = labels[-update_interval:]
         else:
-            current_labels = labels[i - update_interval:i]
+            current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
         # Update and print accuracy evaluations.
         curves, predictions = update_curves(
@@ -266,8 +286,8 @@ for i in range(n_examples):
         print()
 
     # Get next input sample.
-    image = images[i].permute(2, 0, 1)
-    sample = bernoulli(datum=image, time=time, max_prob=1.0).unsqueeze(1)
+    image = images[i]
+    sample = bernoulli(datum=image, time=time, max_prob=0.5).unsqueeze(1).unsqueeze(1)
     inpts = {'X': sample}
 
     # Run the network on the input.
@@ -276,34 +296,30 @@ for i in range(n_examples):
     retries = 0
     while spikes['Y_'].get('s').sum() < 5 and retries < 3:
         retries += 1
-        sample = bernoulli(datum=image, time=time, max_prob=1.0).unsqueeze(1)
+        sample = bernoulli(datum=image, time=time, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
         inpts = {'X': sample}
         network.run(inpts=inpts, time=time)
-
-    # print(spikes['Y'].get('s').sum())
-    # print(spikes['Y_'].get('s').sum())
 
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
 
     # Optionally plot various simulation information.
     if plot:
-        _input = image.permute(1, 2, 0).float()
-        _input /= _input.max()
-
-        reconstruction = inpts['X'].sum(0).view(3, 32, 32).permute(1, 2, 0).float()
-        reconstruction /= reconstruction.max()
-
-        w = conv_conn.w
-        _spikes = {'X': spikes['X'].get('s').view(32*32*3, time),
-                   'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
-                   'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)}
+        _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
+        w1 = conv_conn.w
+        w2 = conv_conn2.w
+        _spikes = {
+            'X': spikes['X'].get('s').view(28 ** 2, time),
+            'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
+            'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
+        }
 
         inpt_axes, inpt_ims = plot_input(
-            images[i].view(32, 32, 3), reconstruction, label=labels[i], ims=inpt_ims, axes=inpt_axes
+            images[i].view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
         )
         spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-        weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.1)
+        weights1_im = plot_conv2d_weights(w1, im=weights1_im)
+        weights2_im = plot_conv2d_weights(w2, im=weights2_im)
 
         plt.pause(1e-8)
 
@@ -316,7 +332,7 @@ i += 1
 if i % len(labels) == 0:
     current_labels = labels[-update_interval:]
 else:
-    current_labels = labels[i - update_interval:i]
+    current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
 # Update and print accuracy evaluations.
 curves, predictions = update_curves(

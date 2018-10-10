@@ -22,7 +22,7 @@ theta_decay=${11:-1e-7}
 intensity=${12:-0.5}
 norm=${13:-0.2}
 
-cd ../../../scripts/mnist/
+cd ../../../experiments/mnist/
 source activate py36
 
 echo $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity $norm
