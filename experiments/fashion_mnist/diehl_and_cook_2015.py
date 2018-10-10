@@ -203,11 +203,19 @@ for i in range(n_examples):
             current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
         # Update and print accuracy evaluations.
-        curves, predictions = update_curves(
+        curves, preds = update_curves(
             curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
             proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
         )
         print_results(curves)
+
+        for scheme in preds:
+            predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
+
+        # Save accuracy curves to disk.
+        to_write = ['train'] + params if train else ['test'] + params
+        f = '_'.join([str(x) for x in to_write]) + '.pt'
+        torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
         if train:
             if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -216,7 +224,7 @@ for i in range(n_examples):
                 # Save network to disk.
                 network.save(os.path.join(params_path, model_name + '.pt'))
                 path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
                 best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
@@ -278,11 +286,19 @@ else:
     current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
 # Update and print accuracy evaluations.
-curves, predictions = update_curves(
+curves, preds = update_curves(
     curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
     proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
 )
 print_results(curves)
+
+for scheme in preds:
+    predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
+
+# Save accuracy curves to disk.
+to_write = ['train'] + params if train else ['test'] + params
+f = '_'.join([str(x) for x in to_write]) + '.pt'
+torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 if train:
     if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -291,7 +307,7 @@ if train:
         # Save network to disk.
         network.save(os.path.join(params_path, model_name + '.pt'))
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+        torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
         best_accuracy = max([x[-1] for x in curves.values()])
 
 if train:
@@ -302,12 +318,6 @@ else:
 print('Average accuracies:\n')
 for scheme in curves.keys():
     print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
-
-# Save accuracy curves to disk.
-to_write = ['train'] + params if train else ['test'] + params
-to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.pt'
-torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
 # Save results to disk.
 results = [
