@@ -38,7 +38,7 @@ def main(cluster='swarm2',
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 
-    sftp.get(param_string + '.p', os.path.join(localpath, param_string + '.p'))
+    sftp.get(param_string + '.pt', os.path.join(localpath, param_string + '.pt'))
 
 
 if __name__ == "__main__":

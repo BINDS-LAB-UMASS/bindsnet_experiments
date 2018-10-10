@@ -6,14 +6,13 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 from sklearn.metrics import confusion_matrix
-from sklearn.linear_model import LogisticRegression
 
 from bindsnet.datasets import MNIST
 from bindsnet.network import Network
 from bindsnet.learning import PostPre
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
-from bindsnet.evaluation import update_ngram_scores, assign_labels, logreg_fit
+from bindsnet.evaluation import update_ngram_scores, assign_labels
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
@@ -123,13 +122,12 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         ngram_scores = {}
-        logreg = LogisticRegression(solver='newton-cg', warm_start=True, n_jobs=-1)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, ngram_scores, logreg = torch.load(open(path, 'rb'))
+        assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'ngram': [], 'logreg': []}
+    curves = {'all': [], 'proportion': [], 'ngram': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -169,7 +167,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
                 curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
+                proportions=proportions, ngram_scores=ngram_scores, n=2
             )
             print_results(curves)
 
@@ -188,7 +186,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                     # Save network to disk.
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
+                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
@@ -196,9 +194,6 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
                 # Compute ngram scores.
                 ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
-
-                # Update logistic regression model.
-                logreg = logreg_fit(spikes=spike_record, labels=current_labels, logreg=logreg)
 
             print()
 
@@ -250,7 +245,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
+        proportions=proportions, ngram_scores=ngram_scores, n=2
     )
     print_results(curves)
 
@@ -264,7 +259,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Save network to disk.
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-            torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
+            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
     if train:
         print('\nTraining complete.\n')
@@ -283,8 +278,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']), np.mean(curves['logreg']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram']), np.max(curves['logreg'])
+        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
+        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -297,8 +292,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time', 'dt',
                     'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting',
-                    'max_ngram', 'mean_logreg', 'max_logreg'
+                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -307,8 +301,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
                     'dt', 'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting',
-                    'max_ngram', 'mean_logreg', 'max_logreg'
+                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram'
                 ]
 
                 header = ','.join(columns) + '\n'

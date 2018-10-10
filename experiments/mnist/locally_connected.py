@@ -15,7 +15,7 @@ from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
-from bindsnet.evaluation import assign_labels, update_ngram_scores, logreg_fit
+from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
 
 from experiments import ROOT_DIR
@@ -159,7 +159,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             # Save accuracies to disk
             to_write = ['train'] + params if train else ['test'] + params
             to_write = [str(x) for x in to_write]
-            f = '_'.join(to_write) + '.p'
+            f = '_'.join(to_write) + '.pt'
             torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
             if train:
@@ -237,8 +237,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             print('New best accuracy! Saving network parameters to disk.')
 
             # Save network to disk.
-            network.save(os.path.join(params_path, model_name + '.p'))
-            path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.p')
+            network.save(os.path.join(params_path, model_name + '.pt'))
+            path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
     if train:
@@ -253,7 +253,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     # Save accuracies to disk
     to_write = ['train'] + params if train else ['test'] + params
     to_write = [str(x) for x in to_write]
-    f = '_'.join(to_write) + '.p'
+    f = '_'.join(to_write) + '.pt'
     torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
     # Save results to disk.

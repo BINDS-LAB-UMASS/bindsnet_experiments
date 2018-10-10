@@ -123,7 +123,7 @@ if train:
     network.add_connection(recurrent_conn, source='Y', target='Y')
 else:
     path = os.path.join('..', '..', 'params', data, model)
-    network = load_network(os.path.join(path, model_name + '.p'))
+    network = load_network(os.path.join(path, model_name + '.pt'))
     network.connections[('X', 'Y')].update_rule = None
 
 # Voltage recording for excitatory and inhibitory layers.
@@ -156,7 +156,7 @@ if train:
     ngram_scores = {}
 else:
     path = os.path.join('..', '..', 'params', data, model)
-    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
     assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
 # Accuracy curves recording.
@@ -205,8 +205,8 @@ for i in range(n_examples):
                     if not os.path.isdir(path):
                         os.makedirs(path)
 
-                    network.save(os.path.join(path, model_name + '.p'))
-                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+                    network.save(os.path.join(path, model_name + '.pt'))
+                    path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
                     torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                 best_accuracy = max([x[-1] for x in curves.values()])
@@ -294,8 +294,8 @@ if train:
             if not os.path.isdir(path):
                 os.makedirs(path)
 
-            network.save(os.path.join(path, model_name + '.p'))
-            path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.p')
+            network.save(os.path.join(path, model_name + '.pt'))
+            path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
         best_accuracy = max([x[-1] for x in curves.values()])
@@ -320,7 +320,7 @@ else:
     to_write = ['test'] + params
 
 to_write = [str(x) for x in to_write]
-f = '_'.join(to_write) + '.p'
+f = '_'.join(to_write) + '.pt'
 
 torch.save((curves, update_interval, n_examples), open(os.path.join(path, f), 'wb'))
 

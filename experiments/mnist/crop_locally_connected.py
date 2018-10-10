@@ -5,8 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
-
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
@@ -15,7 +13,7 @@ from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
-from bindsnet.evaluation import assign_labels, update_ngram_scores, logreg_fit
+from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
 
 from experiments import ROOT_DIR
@@ -112,16 +110,15 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
         rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
         ngram_scores = {}
-        logreg = LogisticRegression(solver='newton-cg', warm_start=True, n_jobs=-1)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, ngram_scores, logreg = torch.load(open(path, 'rb'))
+        assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
     if train:
         best_accuracy = 0
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'ngram': [], 'logreg': []}
+    curves = {'all': [], 'proportion': [], 'ngram': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -156,7 +153,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
                 curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
+                proportions=proportions, ngram_scores=ngram_scores, n=2
             )
             print_results(curves)
 
@@ -175,7 +172,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
                     # Save network to disk.
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
+                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
                     best_accuracy = max([x[-1] for x in curves.values()])
 
@@ -184,9 +181,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
                 # Compute ngram scores.
                 ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
-
-                # Update logistic regression model.
-                logreg = logreg_fit(spikes=spike_record, labels=current_labels, logreg=logreg)
 
             print()
 
@@ -237,7 +231,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, ngram_scores=ngram_scores, n=2, logreg=logreg
+        proportions=proportions, ngram_scores=ngram_scores, n=2
     )
     print_results(curves)
 
@@ -251,7 +245,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             # Save network to disk.
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-            torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
+            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
     if train:
         print('\nTraining complete.\n')
@@ -269,8 +263,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']), np.mean(curves['logreg']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram']), np.max(curves['logreg'])
+        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
+        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -283,14 +277,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
                 f.write(
                     'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,timestep,theta_plus,theta_decay,'
                     'intensity,norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram,mean_logreg,max_logreg\n'
+                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
                     'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,timestep,theta_plus,'
                     'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram,'
-                    'mean_logreg,max_logreg\n'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
     with open(os.path.join(results_path, name), 'a') as f:
