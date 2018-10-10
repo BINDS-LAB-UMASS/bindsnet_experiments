@@ -11,9 +11,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
-from bindsnet.datasets import FashionMNIST
 from bindsnet.encoding import poisson
 from bindsnet.network import load_network
+from bindsnet.datasets import FashionMNIST
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import assign_labels, update_ngram_scores, logreg_fit
