@@ -143,7 +143,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, time=350
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
-                current_labels = labels[i - update_interval:i]
+                current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
@@ -177,7 +177,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, time=350
             print()
 
         # Get next input sample.
-        image = images[i]
+        image = images[i % len(images)]
         sample = poisson(datum=image, time=time)
         inpts = {'X': sample}
 
@@ -197,7 +197,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, time=350
 
         # Optionally plot various simulation information.
         if plot:
-            _input = images[i].view(28, 28)
+            _input = image.view(28, 28)
             reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
             input_exc_weights = network.connections[('X', 'Y')].w
@@ -221,7 +221,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, time=350
     if i % len(labels) == 0:
         current_labels = labels[-update_interval:]
     else:
-        current_labels = labels[i - update_interval:i]
+        current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
     # Update and print accuracy evaluations.
     curves, preds = update_curves(

@@ -19,6 +19,17 @@ from experiments import ROOT_DIR
 data = 'mnist'
 model = 'backprop'
 
+# Paths.
+data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
+params_path = os.path.join(ROOT_DIR, 'params', data, model)
+curves_path = os.path.join(ROOT_DIR, 'curves', data, model)
+results_path = os.path.join(ROOT_DIR, 'results', data, model)
+confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
+
+for path in [params_path, curves_path, results_path, confusion_path]:
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
 
 def main(seed=0, n_train=60000, n_test=10000, time=50, lr=0.01, lr_decay=0.95,
          update_interval=500, max_prob=1.0, plot=False, train=True, gpu=False):
@@ -44,17 +55,6 @@ def main(seed=0, n_train=60000, n_test=10000, time=50, lr=0.01, lr_decay=0.95,
         torch.cuda.manual_seed_all(seed)
     else:
         torch.manual_seed(seed)
-
-    # Paths.
-    data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
-    params_path = os.path.join(ROOT_DIR, 'params', data, model)
-    curves_path = os.path.join(ROOT_DIR, 'curves', data, model)
-    results_path = os.path.join(ROOT_DIR, 'results', data, model)
-    confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
-
-    for path in [params_path, curves_path, results_path, confusion_path]:
-        if not os.path.isdir(path):
-            os.makedirs(path)
 
     criterion = torch.nn.CrossEntropyLoss()  # Loss function on output firing rates.
     n_examples = n_train if train else n_test
@@ -92,8 +92,7 @@ def main(seed=0, n_train=60000, n_test=10000, time=50, lr=0.01, lr_decay=0.95,
     else:
         images, labels = dataset.get_test()
 
-    images, labels = images[:n_examples], labels[:n_examples]
-    images, labels = iter(images.view(-1, 784) / 255), iter(labels)
+    images, labels = images.view(-1, 784) / 255, labels
 
     grads = {}
     accuracies = []
@@ -105,9 +104,10 @@ def main(seed=0, n_train=60000, n_test=10000, time=50, lr=0.01, lr_decay=0.95,
     correct = torch.zeros(update_interval)
 
     # Run training.
-    start = beginning = t()
-    for i, (image, label) in enumerate(zip(images, labels)):
-        label = torch.Tensor([label]).long()
+    start = t()
+    for i in range(n_examples):
+        label = torch.Tensor([labels[i % len(labels)]]).long()
+        image = images[i % len(labels)]
 
         # Run simulation for single datum.
         inpts = {

@@ -233,7 +233,7 @@ for i in range(n_examples):
         if i % len(labels) == 0:
             current_labels = labels[-update_interval:]
         else:
-            current_labels = labels[i - update_interval:i]
+            current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
         # Update and print accuracy evaluations.
         curves, predictions = update_curves(
@@ -316,7 +316,7 @@ i += 1
 if i % len(labels) == 0:
     current_labels = labels[-update_interval:]
 else:
-    current_labels = labels[i - update_interval:i]
+    current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
 # Update and print accuracy evaluations.
 curves, predictions = update_curves(

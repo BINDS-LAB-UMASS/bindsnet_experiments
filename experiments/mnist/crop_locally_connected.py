@@ -151,7 +151,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
-                current_labels = labels[i - update_interval:i]
+                current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
@@ -211,8 +211,10 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
         # Optionally plot various simulation information.
         if plot:
-            _spikes = {'X': spikes['X'].get('s').view(side_length ** 2, time),
-                       'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)}
+            _spikes = {
+                'X': spikes['X'].get('s').view(side_length ** 2, time),
+                'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)
+            }
 
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_locally_connected_weights(
@@ -230,7 +232,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     if i % len(labels) == 0:
         current_labels = labels[-update_interval:]
     else:
-        current_labels = labels[i - update_interval:i]
+        current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
@@ -251,8 +253,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save((assignments, proportions, rates, ngram_scores, logreg), open(path, 'wb'))
 
-            best_accuracy = max([x[-1] for x in curves.values()])
-
     if train:
         print('\nTraining complete.\n')
     else:
@@ -260,7 +260,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
     print('Average accuracies:\n')
     for scheme in curves.keys():
-        print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
+        print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
     # Save accuracy curves to disk.
     to_write = ['train'] + params if train else ['test'] + params
@@ -269,8 +269,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
+        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']), np.mean(curves['logreg']),
+        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram']), np.max(curves['logreg'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -283,13 +283,14 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
                 f.write(
                     'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,timestep,theta_plus,theta_decay,'
                     'intensity,norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram,mean_logreg,max_logreg\n'
                 )
             else:
                 f.write(
                     'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,timestep,theta_plus,'
                     'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
-                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram,'
+                    'mean_logreg,max_logreg\n'
                 )
 
     with open(os.path.join(results_path, name), 'a') as f:
