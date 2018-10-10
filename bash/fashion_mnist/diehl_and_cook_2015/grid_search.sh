@@ -2,7 +2,7 @@
 
 for seed in 0
 do
-    for n_neurons in 100 200 300 400 500
+    for n_neurons in 100 200 300 400 500 
     do 
         for n_train in 60000
         do
