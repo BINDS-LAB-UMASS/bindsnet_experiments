@@ -2,7 +2,7 @@
 #
 #SBATCH --partition=longq
 #SBATCH --time=02-00:00:00
-#SBATCH --mem=32000
+#SBATCH --mem=10000
 #SBATCH --account=rkozma
 #SBATCH --output=../../output/crop_locally_connected_fashion_mnist_%j.out
 #SBATCH --cpus-per-task=8

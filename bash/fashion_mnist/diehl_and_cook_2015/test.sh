@@ -2,7 +2,7 @@
 #
 #SBATCH --partition=longq
 #SBATCH --time=03-00:00:00
-#SBATCH --mem=12000
+#SBATCH --mem=10000
 #SBATCH --account=rkozma
 #SBATCH --output=../../output/diehl_and_cook_2015_fashion_mnist_%j.out
 #SBATCH --cpus-per-task=8
