@@ -13,10 +13,10 @@ from bindsnet.learning import PostPre
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.topology import Connection, Conv2dConnection
-from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
+from bindsnet.network.nodes import Input, DiehlAndCookNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
 
-from scripts.utils import print_results, update_curves
+from experiments.utils import print_results, update_curves
 
 print()
 
@@ -167,6 +167,7 @@ for f in range(n_filters):
         for j in range(conv_size[1]):
             w[0, f, i, j, 0, f, i, j] = 0
 
+w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
 recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
 w = -inhib * torch.ones(
@@ -177,6 +178,7 @@ for f in range(n_filters):
         for j in range(conv_size2[1]):
             w[0, f, i, j, 0, f, i, j] = 0
 
+w = w.view(n_filters * conv_size2[0] * conv_size2[1], n_filters * conv_size2[0] * conv_size2[1])
 recurrent_conn2 = Connection(conv_layer2, conv_layer2, w=w)
 
 network.add_layer(input_layer, name='X')

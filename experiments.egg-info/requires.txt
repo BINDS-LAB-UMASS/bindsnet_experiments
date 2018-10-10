@@ -5,3 +5,4 @@ bindsnet>=0.1.7
 PyYAML
 tqdm
 paramiko
+scikit-learn

@@ -18,10 +18,10 @@ theta_decay=${8:-1e-7}
 intensity=${9:-0.5}
 X_Ae_decay=${10:-0.5}
 
-cd ../../../scripts/cifar10/
+cd ../../../screxperimentsipts/cifar10/
 source activate py36
 
-echo $seed $n_neurons $n_train $n_test $excite $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
+echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity $X_Ae_decay
 
 python diehl_and_cook_2015.py --train --seed $seed --n_neurons $n_neurons --n_train $n_train \
 							  --n_test $n_test --inhib $inhib --time $time \

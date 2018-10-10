@@ -16,7 +16,7 @@ lr=${6:-0.01}
 lr_decay=${7:-0.99}
 update_interval=${8:-500}
 
-cd ../../../scripts/mnist/
+cd ../../../experiments/mnist/
 source activate py36
 
 echo $seed $n_hidden $n_train $n_test $time $lr $lr_decay $update_interval

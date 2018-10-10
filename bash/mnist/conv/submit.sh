@@ -19,7 +19,7 @@ time=${9:-350}
 dt=${10:-1.0}
 intensity=${11:-1.0}
 
-cd ../../../scripts/mnist/
+cd ../../../experiments/mnist/
 source activate py36
 
 echo $seed $n_train $n_test $kernel_size $stride $n_filters $padding $inhib $time $dt $intensity

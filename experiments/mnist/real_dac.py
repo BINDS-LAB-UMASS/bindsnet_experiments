@@ -15,11 +15,9 @@ from bindsnet.network import load_network, Network
 from bindsnet.network.nodes import RealInput, DiehlAndCookNodes
 from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.utils import get_square_weights, get_square_assignments
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights
 
-sys.path.append('..')
-
-from utils import *
+from experiments.utils import update_curves, print_results
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
@@ -40,7 +38,6 @@ parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.set_defaults(plot=False, gpu=False, train=True)
-
 args = parser.parse_args()
 
 seed = args.seed

@@ -19,7 +19,7 @@ theta_plus=${9:-0.05}
 theta_decay=${10:-1e-7}
 intensity=${11:-0.5}
 
-cd ../../../scripts/mnist/
+cd ../../../experiments/mnist/
 source activate py36
 
 echo $seed $kernel_size $stride $n_filters $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity

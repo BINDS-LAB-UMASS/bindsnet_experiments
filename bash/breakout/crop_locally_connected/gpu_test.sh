@@ -22,7 +22,7 @@ theta_plus=${11:-0.05}
 theta_decay=${12:-1e-7}
 norm=${13:-0.2}
 
-cd ../../../scripts/breakout/
+cd ../../../experiments/breakout/
 source activate py36
 
 echo $seed $k1 $k2 $s1 $s2 $n_filters $n_train $n_test $inhib $time $theta_plus $theta_decay $norm

@@ -19,7 +19,7 @@ time=${9:-350}
 theta_plus=${10:-0.05}
 theta_decay=${11:-1e-7}
 
-cd ../../../scripts/breakout/
+cd ../../../experiments/breakout/
 source activate py36
 
 echo $seed $n_neurons $n_train $n_test $start_inhib $max_inhib $p_low $norm $time $theta_plus $theta_decay

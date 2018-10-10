@@ -9,7 +9,7 @@ setup(
     name='experiments',
     version=version,
     description='Experiments with BindsNET spiking neural network simulator',
-    license='AGPL-3.0',
+    license='MIT',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='http://github.com/djsaunde/bindsnet_experiments',

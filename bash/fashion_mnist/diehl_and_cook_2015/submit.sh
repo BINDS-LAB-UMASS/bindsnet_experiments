@@ -18,7 +18,7 @@ theta_decay=${8:-1e-7}
 intensity=${9:-0.5}
 norm=${10:-100}
 
-cd ../../../scripts/fashion_mnist/
+cd ../../../experiments/fashion_mnist/
 source activate py36
 
 echo $seed $n_neurons $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity norm
