@@ -1,11 +1,12 @@
-import os
 import torch
 import argparse
 import pandas as pd
 
 from time import time as t
-# from brian2 import PoissonGroup, ms, mV, Hz, NeuronGroup, Synapses, StateMonitor, SpikeMonitor, run, second
+from scipy.optimize import bisect
+
 from brian2 import *
+from nest import *
 
 from experiments import ROOT_DIR
 
@@ -70,8 +71,8 @@ def brian(n_neurons, time):
     dApre *= gmax
 
     eqs_neurons = '''
-    dv/dt = (ge * (Ee-vr) + El - v) / taum : volt
-    dge/dt = -ge / taue : 1
+        dv/dt = (ge * (Ee-vr) + El - v) / taum : volt
+        dge/dt = -ge / taue : 1
     '''
 
     input = PoissonGroup(n_neurons, rates=F)
@@ -88,7 +89,20 @@ def brian(n_neurons, time):
 
 
 def neuron(n_neurons, time):
-    pass
+    r_ex = 5.0  # [Hz] rate of exc. neurons
+    epsc = 45.0  # [pA] amplitude of exc.
+    ipsc = -45.0  # [pA] amplitude of inh.
+
+    # synaptic currents
+    d = 1.0  # [ms] synaptic delay
+    lower = 5.0  # [Hz] lower bound of the search interval
+    upper = 25.0  # [Hz] upper bound of the search interval
+    prec = 0.05  # accuracy goal (in percent of inhibitory rate)
+
+    neuron = Create("iaf_neuron")
+    noise = Create("poisson_generator", 2)
+    voltmeter = Create("voltmeter")
+    spikedetector = Create("spike_detector")
 
 
 def nest(n_neurons, time):
