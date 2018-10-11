@@ -1,22 +1,19 @@
 import os
 import sys
-import scp
 import yaml
 import argparse
-import pandas as pd
 
 from paramiko import SSHClient
-from scp import SCPClient
+
+from experiments import ROOT_DIR
 
 
-def main(cluster='swarm2',
-         model='diehl_and_cook_2015',
-         data='mnist',
-         param_string=None):
+def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', train=True):
+    # language=rst
     """
-    Downloads training curves for a particular network from a CICS cluster.
+    Downloads results CSV file from one of the CICS clusters.
     """
-    f = os.path.join('..', 'credentials.yml')
+    f = os.path.join(ROOT_DIR, 'credentials.yml')
 
     try:
         creds = yaml.load(open(f, 'r'))
@@ -27,31 +24,38 @@ def main(cluster='swarm2',
     username = creds['username']
     password = creds['password']
 
+    if train:
+        f = 'train.csv'
+    else:
+        f = 'test.csv'
+
     ssh = SSHClient()
     ssh.load_system_host_keys()
     ssh.connect(f'{cluster}.cs.umass.edu', username=username, password=password)
 
     sftp = ssh.open_sftp()
-    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/curves/{data}/{model}/')
+    sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/results/{data}/{model}/')
     
-    localpath = os.path.join('..', 'curves', data, model)
+    localpath = os.path.join(ROOT_DIR, 'results', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 
-    sftp.get(param_string + '.pt', os.path.join(localpath, param_string + '.pt'))
+    sftp.get(f, os.path.join(localpath, f))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cluster', type=str, default='swarm2')
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
-    parser.add_argument('--param_string', type=str, required=True)
+    parser.add_argument('--cluster', type=str, default='swarm2')
+    parser.add_argument('--train', dest='train', action='store_true')
+    parser.add_argument('--test', dest='train', action='store_false')
+    parser.set_defaults(train=False)
     args = parser.parse_args()
 
-    cluster = args.cluster
     model = args.model
     data = args.data
-    param_string = args.param_string
+    cluster = args.cluster
+    train = args.train
 
-    main(cluster, model, data, param_string)
+    main(model, data, cluster, train)

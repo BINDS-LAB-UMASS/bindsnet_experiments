@@ -6,13 +6,15 @@ import argparse
 from tqdm import tqdm
 from paramiko import SSHClient
 
+from experiments import ROOT_DIR
+
 
 def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2', param_string=None, match=None):
     # language=rst
     """
     Downloads parameters for a particular network from the CICS swarm2 cluster.
     """
-    f = os.path.join('..', 'credentials.yml')
+    f = os.path.join(ROOT_DIR, 'credentials.yml')
     mode = 'train' if train else 'test'
 
     try:
@@ -31,7 +33,7 @@ def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2
     sftp = ssh.open_sftp()
     sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/confusion/{data}/{model}/')
 
-    localpath = os.path.join('..', 'confusion', data, model)
+    localpath = os.path.join(ROOT_DIR, 'confusion', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 

@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 from bindsnet.utils import get_square_weights
 from bindsnet.analysis.plotting import plot_weights, plot_locally_connected_weights
 
-import download_params
+from experiments import ROOT_DIR
+from experiments.analysis import download_params
 
 
 def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
     assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
-    f = os.path.join('..', 'params', data, model, f'{param_string}.pt')
+    f = os.path.join(ROOT_DIR, 'params', data, model, f'{param_string}.pt')
     if not os.path.isfile(f):
         print('File not found locally. Attempting download from swarm2 cluster.')
         download_params.main(model=model, data=data, param_string=param_string)
@@ -121,7 +122,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
                 for k in range(2):
                     w[j * 50: (j + 1) * 50, k * 72: (k + 1) * 72] = weights[j + k * 2]
 
-            weights_im = plot_weights(w)
+            plot_weights(w)
 
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
@@ -138,6 +139,45 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
                     w[i * 28: (i + 1) * 28, j * 28: (j + 1) * 28] = weights[i + j * 5]
 
             plot_weights(w, wmin=-1, wmax=1)
+
+        elif model in ['diehl_and_cook_2015']:
+            params = param_string.split('_')
+            n_sqrt = int(np.ceil(np.sqrt(int(params[1]))))
+            side = int(np.sqrt(network.layers['X'].n))
+
+            w = network.connections[('X', 'Y')].w
+            w = get_square_weights(w, n_sqrt, side)
+            plot_weights(w)
+
+        elif model in ['crop_locally_connected']:
+            params = param_string.split('_')
+            kernel_size = int(params[1])
+            stride = int(params[2])
+            n_filters = int(params[3])
+
+            if model in ['crop_locally_connected', 'bern_crop_locally_connected']:
+                crop = int(params[4])
+                side_length = 28 - crop * 2
+            else:
+                side_length = 28
+
+            if kernel_size == side_length:
+                conv_size = 1
+            else:
+                conv_size = int((side_length - kernel_size) / stride) + 1
+
+            locations = torch.zeros(kernel_size, kernel_size, conv_size, conv_size).long()
+            for c1 in range(conv_size):
+                for c2 in range(conv_size):
+                    for k1 in range(kernel_size):
+                        for k2 in range(kernel_size):
+                            location = c1 * stride * side_length + c2 * stride + k1 * side_length + k2
+                            locations[k1, k2, c1, c2] = location
+
+            locations = locations.view(kernel_size ** 2, conv_size ** 2)
+
+            w = network.connections['X', 'Y'].w
+            plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, side_length)
 
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
@@ -159,7 +199,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
 
-    path = os.path.join('..', 'plots', data, model, 'weights')
+    path = os.path.join(ROOT_DIR, 'plots', data, model, 'weights')
     if not os.path.isdir(path):
         os.makedirs(path)
 

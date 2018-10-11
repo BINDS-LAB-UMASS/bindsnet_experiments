@@ -3,14 +3,15 @@ import torch
 import argparse
 import matplotlib.pyplot as plt
 
-import download_confusion
+from experiments import ROOT_DIR
+from experiments.analysis import download_confusion
 
 
 def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2', param_string=None, match=None):
     assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
     mode = 'train' if train else 'test'
-    f = os.path.join('..', 'confusion', data, model, f'{mode}_{param_string}.pt')
+    f = os.path.join(ROOT_DIR, 'confusion', data, model, f'{mode}_{param_string}.pt')
     if not os.path.isfile(f):
         print('File not found locally. Attempting download from swarm2 cluster.')
         download_confusion.main(
@@ -30,7 +31,7 @@ def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2
 
         normed = confusion / confusion.sum(1)
 
-        path = os.path.join('..', 'plots', data, model, 'confusion_matrices', param_string)
+        path = os.path.join(ROOT_DIR, 'plots', data, model, 'confusion_matrices', param_string)
         if not os.path.isdir(path):
             os.makedirs(path)
 

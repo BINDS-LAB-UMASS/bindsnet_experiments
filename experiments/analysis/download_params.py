@@ -6,12 +6,14 @@ import argparse
 from tqdm import tqdm
 from paramiko import SSHClient
 
+from experiments import ROOT_DIR
+
 
 def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', param_string=None, match=None):
     """
     Downloads parameters for a particular network from the CICS swarm2 cluster.
     """
-    f = os.path.join('..', 'credentials.yml')
+    f = os.path.join(ROOT_DIR, 'credentials.yml')
 
     try:
         creds = yaml.load(open(f, 'r'))
@@ -29,7 +31,7 @@ def main(model='diehl_and_cook_2015', data='mnist', cluster='swarm2', param_stri
     sftp = ssh.open_sftp()
     sftp.chdir(f'/mnt/nfs/work1/rkozma/{username}/experiments/params/{data}/{model}/')
     
-    localpath = os.path.join('..', 'params', data, model)
+    localpath = os.path.join(ROOT_DIR, 'params', data, model)
     if not os.path.isdir(localpath):
         os.makedirs(localpath, exist_ok=True)
 

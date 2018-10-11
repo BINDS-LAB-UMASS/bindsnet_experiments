@@ -6,13 +6,8 @@ import pandas as pd
 from itertools import product
 
 
-def main(model='diehl_and_cook_2015',
-         data='mnist',
-         train=True,
-         fix={},
-         vary=[],
-         metric='mean_all_activity',
-         top=None):
+def main(model='diehl_and_cook_2015', data='mnist', train=True, fix={}, vary=[], metric='mean_all_activity', top=None):
+    # language=rst
     """
     Gets the train or test results from a particular data / model combo's
     experiments, fix certain parameters to values, and return the results sorted

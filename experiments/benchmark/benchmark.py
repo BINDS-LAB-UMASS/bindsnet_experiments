@@ -1,13 +1,10 @@
+import os
 import torch
 import argparse
 import pandas as pd
 
-from time import time as t
-from scipy.optimize import bisect
-
 from brian2 import *
-from nest import *
-
+from time import time as t
 from experiments import ROOT_DIR
 
 benchmark_path = os.path.join(ROOT_DIR, 'benchmark')
@@ -55,40 +52,25 @@ def bindsnet_gpu(n_neurons, time):
 
 
 def brian(n_neurons, time):
-    taum = 10 * ms
-    taupre = 20 * ms
-    taupost = taupre
-    Ee = 0 * mV
-    vt = -54 * mV
-    vr = -60 * mV
-    El = -74 * mV
-    taue = 5 * ms
-    F = 15 * Hz
-    gmax = .01
-    dApre = .01
-    dApost = -dApre * taupre / taupost * 1.05
-    dApost *= gmax
-    dApre *= gmax
-
     eqs_neurons = '''
-        dv/dt = (ge * (Ee-vr) + El - v) / taum : volt
-        dge/dt = -ge / taue : 1
+        dv/dt = (ge * (-60 * mV) + (-74 * mV) - v) / (10 * ms) : volt
+        dge/dt = -ge / (5 * ms) : 1
     '''
 
-    input = PoissonGroup(n_neurons, rates=F)
+    input = PoissonGroup(n_neurons, rates=15 * Hz)
     neurons = NeuronGroup(
-        n_neurons, eqs_neurons, threshold='v>vt', reset='v = vr', method='exact'
+        n_neurons, eqs_neurons, threshold='v > (-54 * mV)', reset='v = -60 * mV', method='exact'
     )
-    S = Synapses(
-        input, neurons, '''w : 1'''
-    )
+    S = Synapses(input, neurons, '''w: 1''')
     S.connect()
-    S.w = 'rand() * gmax'
+    S.w = 'rand() * 0.01'
 
     run(time * ms)
 
 
 def neuron(n_neurons, time):
+    return
+
     r_ex = 5.0  # [Hz] rate of exc. neurons
     epsc = 45.0  # [pA] amplitude of exc.
     ipsc = -45.0  # [pA] amplitude of inh.

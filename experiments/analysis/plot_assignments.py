@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 from bindsnet.utils import get_square_assignments
 from bindsnet.analysis.plotting import plot_assignments
 
-import download_params
+from experiments import ROOT_DIR
+from experiments.analysis import download_params
 
 
 def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
     assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
-    f = os.path.join('..', 'params', data, model, f'auxiliary_{param_string}.pt')
+    f = os.path.join(ROOT_DIR, 'params', data, model, f'auxiliary_{param_string}.pt')
     if not os.path.isfile(f):
         print('File not found locally. Attempting download from swarm2 cluster.')
         download_params.main(model=model, data=data, param_string=param_string)
@@ -25,7 +26,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
         assignments = get_square_assignments(assignments=assignments, n_sqrt=int(np.sqrt(assignments.numel())))
         plot_assignments(assignments=assignments, classes=['no-op', 'fire', 'right', 'left'])
 
-    path = os.path.join('..', 'plots', data, model, 'assignments')
+    path = os.path.join(ROOT_DIR, 'plots', data, model, 'assignments')
     if not os.path.isdir(path):
         os.makedirs(path)
 
