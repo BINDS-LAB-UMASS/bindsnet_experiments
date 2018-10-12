@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
-from bindsnet.learning import NoOp
-from bindsnet.encoding import poisson
+from bindsnet.learning import NoOp, PostPre
 from bindsnet.network import load_network
 from bindsnet.datasets import FashionMNIST
+from bindsnet.network.nodes import RealInput
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import assign_labels, update_ngram_scores
@@ -82,7 +82,7 @@ for key, value in args.items():
 
 print()
 
-model = 'crop_locally_connected'
+model = 'real_crop_locally_connected'
 data = 'fashion_mnist'
 
 top_level = os.path.join('..', '..')
@@ -131,8 +131,13 @@ per_class = int(n_examples / n_classes)
 if train:
     network = LocallyConnectedNetwork(
         n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-        n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=0.2 * norm, theta_plus=theta_plus,
+        n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=1e-2, theta_plus=theta_plus,
         theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
+    )
+    network.layers['X'] = RealInput(n=784, traces=True)
+    network.connections['X', 'Y'].source = network.layers['X']
+    network.connections['X', 'Y'].update_rule = PostPre(
+        connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
     )
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
@@ -239,17 +244,16 @@ for i in range(n_examples):
                 best_accuracy = max([x[-1] for x in curves.values()])
 
             # Assign labels to excitatory layer neurons.
-            assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
+            assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
 
             # Compute ngram scores.
-            ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
+            ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
         print()
 
     # Get next input sample.
-    image = images[i].contiguous().view(-1)
-    sample = poisson(datum=image, time=time)
-    inpts = {'X': sample}
+    image = images[i % len(images)].contiguous().view(-1)
+    inpts = {'X': image.repeat([time, 1])}
 
     # Run the network on the input.
     network.run(inpts=inpts, time=time)
@@ -258,8 +262,7 @@ for i in range(n_examples):
     while spikes['Y'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
-        sample = poisson(datum=image, time=time)
-        inpts = {'X': sample}
+        inpts = {'X': image.repeat([time, 1])}
         network.run(inpts=inpts, time=time)
 
     # Add to spikes recording.
