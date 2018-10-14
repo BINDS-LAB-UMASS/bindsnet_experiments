@@ -196,18 +196,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, time=350
 
         # Optionally plot various simulation information.
         if plot:
-            _input = image.view(28, 28)
-            reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
+            # _input = image.view(28, 28)
+            # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
             input_exc_weights = network.connections[('X', 'Y')].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-            square_assignments = get_square_assignments(assignments, n_sqrt)
+            # square_assignments = get_square_assignments(assignments, n_sqrt)
 
-            inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
-            assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            perf_ax = plot_performance(curves, ax=perf_ax)
+            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
+            # perf_ax = plot_performance(curves, ax=perf_ax)
 
             plt.pause(1e-8)
 
