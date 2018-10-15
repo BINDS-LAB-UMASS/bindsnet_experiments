@@ -7,6 +7,11 @@ from brian2 import *
 from time import time as t
 from experiments import ROOT_DIR
 
+from bindsnet.network import Network
+from bindsnet.network.topology import Connection
+from bindsnet.network.nodes import Input, LIFNodes
+from bindsnet.encoding import poisson
+
 benchmark_path = os.path.join(ROOT_DIR, 'benchmark')
 if not os.path.isdir(benchmark_path):
     os.makedirs(benchmark_path)
@@ -14,11 +19,6 @@ if not os.path.isdir(benchmark_path):
 
 def bindsnet_cpu(n_neurons, time):
     torch.set_default_tensor_type('torch.FloatTensor')
-
-    from bindsnet.network import Network
-    from bindsnet.network.topology import Connection
-    from bindsnet.network.nodes import Input, LIFNodes
-    from bindsnet.encoding import poisson
 
     network = Network()
     network.add_layer(Input(n=n_neurons), name='X')
@@ -34,11 +34,6 @@ def bindsnet_cpu(n_neurons, time):
 def bindsnet_gpu(n_neurons, time):
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
-        from bindsnet.network import Network
-        from bindsnet.network.topology import Connection
-        from bindsnet.network.nodes import Input, LIFNodes
-        from bindsnet.encoding import poisson
 
         network = Network()
         network.add_layer(Input(n=n_neurons), name='X')
