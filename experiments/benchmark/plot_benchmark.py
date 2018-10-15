@@ -12,7 +12,7 @@ if not os.path.isdir(benchmark_path):
     os.makedirs(benchmark_path)
 
 
-def main(start=100, stop=1000, step=100, time=1000, interval=100):
+def main(start=100, stop=1000, step=100, time=1000, interval=100, plot=False):
     name = f'benchmark_{start}_{stop}_{step}_{time}'
     f = os.path.join(benchmark_path, name + '.csv')
     df = pd.read_csv(f, index_col=0)
@@ -28,7 +28,8 @@ def main(start=100, stop=1000, step=100, time=1000, interval=100):
 
     plt.savefig(os.path.join(figure_path, name + '.png'))
 
-    plt.show()
+    if plot:
+        plt.show()
 
 
 if __name__ == '__main__':
@@ -38,6 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--step', type=int, default=100)
     parser.add_argument('--time', type=int, default=1000)
     parser.add_argument('--interval', type=int, default=1000)
+    parser.add_argument('--plot', dest='plot', action='store_true')
+    parser.set_defaults(plot=False)
     args = parser.parse_args()
 
-    main(start=args.start, stop=args.stop, step=args.step, time=args.time, interval=args.interval)
+    main(start=args.start, stop=args.stop, step=args.step, time=args.time, interval=args.interval, plot=args.plot)

@@ -4,20 +4,23 @@ import argparse
 import pandas as pd
 
 from brian2 import *
+from nest import *
 from time import time as t
 from experiments import ROOT_DIR
 
 from bindsnet.network import Network
+from bindsnet.encoding import poisson
 from bindsnet.network.topology import Connection
 from bindsnet.network.nodes import Input, LIFNodes
-from bindsnet.encoding import poisson
 
 benchmark_path = os.path.join(ROOT_DIR, 'benchmark')
 if not os.path.isdir(benchmark_path):
     os.makedirs(benchmark_path)
 
+torch.set_default_tensor_type('torch.FloatTensor')
 
-def bindsnet_cpu(n_neurons, time):
+
+def BindsNET_cpu(n_neurons, time):
     torch.set_default_tensor_type('torch.FloatTensor')
 
     network = Network()
@@ -31,7 +34,7 @@ def bindsnet_cpu(n_neurons, time):
     network.run(inpts=data, time=time)
 
 
-def bindsnet_gpu(n_neurons, time):
+def BindsNET_gpu(n_neurons, time):
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -46,7 +49,7 @@ def bindsnet_gpu(n_neurons, time):
         network.run(inpts=data, time=time)
 
 
-def brian(n_neurons, time):
+def BRIAN2(n_neurons, time):
     eqs_neurons = '''
         dv/dt = (ge * (-60 * mV) + (-74 * mV) - v) / (10 * ms) : volt
         dge/dt = -ge / (5 * ms) : 1
@@ -63,27 +66,18 @@ def brian(n_neurons, time):
     run(time * ms)
 
 
-def neuron(n_neurons, time):
-    return
+def PyNEST(n_neurons, time):
+    ResetKernel()
 
     r_ex = 5.0  # [Hz] rate of exc. neurons
-    epsc = 45.0  # [pA] amplitude of exc.
-    ipsc = -45.0  # [pA] amplitude of inh.
 
-    # synaptic currents
-    d = 1.0  # [ms] synaptic delay
-    lower = 5.0  # [Hz] lower bound of the search interval
-    upper = 25.0  # [Hz] upper bound of the search interval
-    prec = 0.05  # accuracy goal (in percent of inhibitory rate)
+    neuron = Create("iaf_psc_alpha", n_neurons)
+    noise = Create("poisson_generator", n_neurons)
 
-    neuron = Create("iaf_neuron")
-    noise = Create("poisson_generator", 2)
-    voltmeter = Create("voltmeter")
-    spikedetector = Create("spike_detector")
+    SetStatus(noise, [{"rate": n_neurons * r_ex}])
+    Connect(noise, neuron)    
 
-
-def nest(n_neurons, time):
-    pass
+    Simulate(time)
 
 
 def main(start=100, stop=1000, step=100, time=1000):
@@ -92,7 +86,7 @@ def main(start=100, stop=1000, step=100, time=1000):
         os.remove(f)
 
     times = {
-        'bindsnet_cpu': [], 'bindsnet_gpu': [], 'brian': [], 'neuron': [], 'nest': []
+        'BindsNET_cpu': [], 'BindsNET_gpu': [], 'BRIAN2': [], 'PyNEST': []
     }
 
     for n_neurons in range(start, stop + step, step):
