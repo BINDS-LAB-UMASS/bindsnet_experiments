@@ -17,7 +17,10 @@ benchmark_path = os.path.join(ROOT_DIR, 'benchmark')
 if not os.path.isdir(benchmark_path):
     os.makedirs(benchmark_path)
 
-torch.set_default_tensor_type('torch.FloatTensor')
+# "Warm up" the GPU.
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+x = torch.rand(1000)
+del x
 
 
 def BindsNET_cpu(n_neurons, time):
@@ -68,13 +71,16 @@ def BRIAN2(n_neurons, time):
 
 def PyNEST(n_neurons, time):
     ResetKernel()
+    SetKernelStatus({"local_num_threads": 8, "resolution": 1.0})
 
-    r_ex = 5.0  # [Hz] rate of exc. neurons
+    print(NumProcesses())
+
+    r_ex = 60.0  # [Hz] rate of exc. neurons
 
     neuron = Create("iaf_psc_alpha", n_neurons)
     noise = Create("poisson_generator", n_neurons)
 
-    SetStatus(noise, [{"rate": n_neurons * r_ex}])
+    SetStatus(noise, [{"rate": r_ex}])
     Connect(noise, neuron)    
 
     Simulate(time)
