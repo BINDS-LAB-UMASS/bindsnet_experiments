@@ -5,6 +5,8 @@ import pandas as pd
 
 from itertools import product
 
+from experiments import ROOT_DIR
+
 
 def main(model='diehl_and_cook_2015', data='mnist', train=True, fix={}, vary=[], metric='mean_all_activity', top=None):
     # language=rst
@@ -14,7 +16,7 @@ def main(model='diehl_and_cook_2015', data='mnist', train=True, fix={}, vary=[],
     in descending order of some metric.
     """
     f = 'train.csv' if train else 'test.csv'
-    path = os.path.join('..', 'results', data, model, f)
+    path = os.path.join(ROOT_DIR, 'results', data, model, f)
 
     df = pd.read_csv(path)
 
@@ -28,9 +30,9 @@ def main(model='diehl_and_cook_2015', data='mnist', train=True, fix={}, vary=[],
     for v in vary:
         unique[v] = df[v].unique()
 
-    df.drop(labels=[c for c in df.columns if 'max' in c],
-            axis='columns',
-            inplace=True)
+    df.drop(
+        labels=[c for c in df.columns if 'max' in c], axis='columns', inplace=True
+    )
 
     groupby_columns = list(set(df.columns) - {'random_seed'} - \
                            set([c for c in df.columns if 'mean' in c]))
