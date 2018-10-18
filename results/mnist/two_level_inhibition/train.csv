@@ -1,0 +1,4 @@
+random_seed,n_neurons,n_train,excite,inhib,time,timestep,theta_plus,theta_decay,intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram
+0,100,1000,5,250,0.01,1,1.0,0.05,1e-07,0.5,10,250,11.0,11.0,11.0,12.4,12.4,12.4
+0,100,1000,5,250,0.01,1,1.0,0.05,1e-07,0.5,10,250,11.0,11.0,11.0,12.4,12.4,12.4
+0,100,1000,5,250,0.1,1,1.0,0.05,1e-07,0.5,10,250,11.0,11.0,11.0,12.4,12.4,12.4

@@ -35,7 +35,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stride=(2,), n_filters=25,
+def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], stride=[2], n_filters=25,
          time=25, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
          update_interval=250, plot=False, train=True, gpu=False):
 
@@ -77,6 +77,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         network.connections['X', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
+        network.layers['Y'].theta_decay = 0
+        network.layers['Y'].theta_plus = 0
 
     conv_size = network.connections[('X', 'Y')].conv_size
     locations = network.connections[('X', 'Y')].locations
