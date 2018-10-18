@@ -1,4 +1,0 @@
-seed,n_train,kernel_size,stride,n_filters,padding,inhib,time,dt,intensity,update_interval,mean_all_activity,mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram
-0,10,[4, 4],[2, 2],25,0,100.0,100,1.0,1,10,0.0,0.0,0.0,0.0,0.0,0.0
-0,10,[4, 4],[2, 2],25,0,100.0,100,1.0,1,10,0.0,0.0,0.0,0.0,0.0,0.0
-0,10,[8, 8],[1, 1],25,0,100.0,100,1.0,1,10,0.0,0.0,0.0,0.0,0.0,0.0

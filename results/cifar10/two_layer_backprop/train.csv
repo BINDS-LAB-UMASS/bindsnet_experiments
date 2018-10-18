@@ -1,2 +1,0 @@
-seed,n_hidden,n_train,time,lr,lr_decay,update_interval,mean_accuracy,max_accuracy
-0,100,60000,5,0.0001,0.95,500,2.082,4.0
