@@ -12,3 +12,7 @@ credentials.yml
 .idea/workspace.xml
 
 scripts/__pycache__/
+
+experiments/benchmark/annarchy
+experiments/benchmark/GeNNworkspace
+experiments/benchmark/output

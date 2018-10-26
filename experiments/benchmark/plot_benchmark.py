@@ -20,11 +20,11 @@ def main(start=100, stop=1000, step=100, time=1000, interval=100, plot=False):
     for c in df.columns:
         plt.plot(df[c], label=c)
 
-    plt.title('Benchmark comparison of SNN simulation frameworks')
+    plt.title('Benchmark comparison of SNN simulation libraries')
     plt.xticks(range(0, stop + interval, interval))
-    plt.xlabel('No. of input and output neurons')
+    plt.xlabel('Number of input / output neurons')
     plt.ylabel('Simulation time (seconds)')
-    plt.legend()
+    plt.legend(loc=1, prop={'size': 8})
 
     plt.savefig(os.path.join(figure_path, name + '.png'))
 

@@ -1,0 +1,7 @@
+In file included from /usr/include/python2.7/numpy/ndarraytypes.h:1777:0,
+                 from /usr/include/python2.7/numpy/ndarrayobject.h:18,
+                 from /usr/include/python2.7/numpy/arrayobject.h:4,
+                 from ANNarchyCore0.cpp:631:
+/usr/include/python2.7/numpy/npy_1_7_deprecated_api.h:15:2: warning: #warning "Using deprecated NumPy API, disable it by " "#defining NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION" [-Wcpp]
+ #warning "Using deprecated NumPy API, disable it by " \
+  ^
