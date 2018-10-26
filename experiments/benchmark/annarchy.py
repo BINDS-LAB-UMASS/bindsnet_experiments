@@ -95,7 +95,7 @@ def ANNarchy_gpu(n_neurons, time):
 
 
 def main(start=100, stop=1000, step=100, time=1000, interval=100, plot=False):
-    times = {'ANNarchy_cpu' : []} # , 'ANNarchy_gpu': []}
+    times = {'ANNarchy_cpu' : [], 'ANNarchy_gpu': []}
 
     f = os.path.join(benchmark_path, 'benchmark_{start}_{stop}_{step}_{time}.csv'.format(**locals()))
     if not os.path.isfile(f):

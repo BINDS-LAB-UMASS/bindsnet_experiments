@@ -1,8 +1,0 @@
-cython -2 ANNarchyCore0.pyx --cplus
-g++ -march=native -O2 -shared -fPIC -fpermissive -std=c++11  \
-        *.cpp -o ANNarchyCore0.so \
-        `/usr/bin/python2-config --includes` -I/usr/local/lib/python2.7/dist-packages/numpy/core/include \
-        -I/usr/local/lib/python2.7/dist-packages/ANNarchy/core/cython_ext/ \
-        -lpython2.7 \
-        -L/usr/lib 
-mv ANNarchyCore0.so ../..
