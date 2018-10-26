@@ -1,30 +1,29 @@
 import os
-import sys
 import torch
-import numpy as np
 import argparse
+import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
-
 from sklearn.metrics import confusion_matrix
 
-from bindsnet.learning import NoOp
-from bindsnet.datasets import MNIST
-from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.datasets import SpokenMNIST
+from bindsnet.learning import NoOp, PostPre
 from bindsnet.network.monitors import Monitor
-from bindsnet.models import LocallyConnectedNetwork
+from bindsnet.network.topology import Connection
+from bindsnet.network import load_network, Network
+from bindsnet.network.nodes import RealInput, DiehlAndCookNodes
 from bindsnet.evaluation import assign_labels, update_ngram_scores
-from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
+from bindsnet.utils import get_square_weights, get_square_assignments
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
-model = 'locally_connected'
-data = 'mnist'
+model = 'diehl_and_cook_2015'
+data = 'spoken_mnist'
 
-data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
+data_path = os.path.join(ROOT_DIR, 'data', 'SpokenMNIST')
 params_path = os.path.join(ROOT_DIR, 'params', data, model)
 curves_path = os.path.join(ROOT_DIR, 'curves', data, model)
 results_path = os.path.join(ROOT_DIR, 'results', data, model)
@@ -35,25 +34,23 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], stride=[2], n_filters=25,
-         time=25, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
-         update_interval=250, plot=False, train=True, gpu=False):
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=500, dt=1, theta_plus=0.05, theta_decay=1e-7,
+         intensity=1 / 40, progress_interval=10, update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                             'No. examples must be divisible by update_interval'
 
     params = [
-        seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
-        theta_plus, theta_decay, intensity, progress_interval, update_interval
+        seed, n_neurons, n_train, inhib, dt, theta_plus, theta_decay,
+        intensity, progress_interval, update_interval
+    ]
+
+    test_params = [
+        seed, n_neurons, n_train, n_test, inhib, dt, theta_plus,
+        theta_decay, intensity, progress_interval, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
-
-    if not train:
-        test_params = [
-            seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time, dt,
-            theta_plus, theta_decay, intensity, progress_interval, update_interval
-        ]
 
     np.random.seed(seed)
 
@@ -64,14 +61,35 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
         torch.manual_seed(seed)
 
     n_examples = n_train if train else n_test
+    n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
     n_classes = 10
 
     # Build network.
     if train:
-        network = LocallyConnectedNetwork(
-            n_inpt=784, input_shape=[28, 28], kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib,
-            dt=dt, nu_pre=1e-4, nu_post=1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=0.2
+        network = Network()
+
+        input_layer = RealInput(n=40, traces=True, trace_tc=5e-2)
+        network.add_layer(input_layer, name='X')
+
+        output_layer = DiehlAndCookNodes(
+            n=n_neurons, traces=True, rest=-65.0, reset=-65.0, thresh=-52.0, refrac=5,
+            decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
         )
+        network.add_layer(output_layer, name='Y')
+
+        w = 0.3 * torch.rand(40, n_neurons)
+        input_connection = Connection(
+            source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=PostPre,
+            nu=(0, 1), wmin=0, wmax=1, norm=4
+        )
+        network.add_connection(input_connection, source='X', target='Y')
+
+        w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
+        recurrent_connection = Connection(
+            source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
+        )
+        network.add_connection(recurrent_connection, source='Y', target='Y')
+
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -80,27 +98,19 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
         network.layers['Y'].theta_decay = 0
         network.layers['Y'].theta_plus = 0
 
-    conv_size = network.connections[('X', 'Y')].conv_size
-    locations = network.connections[('X', 'Y')].locations
-    conv_prod = int(np.prod(conv_size))
-    n_neurons = n_filters * conv_prod
-
-    # Voltage recording for excitatory and inhibitory layers.
-    voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
-    network.add_monitor(voltage_monitor, name='output_voltage')
-
-    # Load MNIST data.
-    dataset = MNIST(data_path, download=True)
+    # Load Spoken MNIST data.
+    dataset = SpokenMNIST(path=data_path, download=True, shuffle=False)
 
     if train:
-        images, labels = dataset.get_train()
+        audio, labels = dataset.get_train()
     else:
-        images, labels = dataset.get_test()
+        audio, labels = dataset.get_test()
 
-    images *= intensity
+    audio = [_ * intensity for _ in audio]
 
     # Record spikes during the simulation.
-    spike_record = torch.zeros(update_interval, time, n_neurons)
+    avg_time = int(np.mean([_.size(0) for _ in audio]))
+    spike_record = torch.zeros(update_interval, avg_time, n_neurons)
 
     # Neuron assignments and spike proportions.
     if train:
@@ -112,7 +122,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
         assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
 
-    # Accuracy curves recording.
+    # Sequence of accuracy estimates.
     curves = {'all': [], 'proportion': [], 'ngram': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
@@ -123,8 +133,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
 
     spikes = {}
     for layer in set(network.layers):
-        spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
-        network.add_monitor(spikes[layer], name=f'{layer}_spikes')
+        spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=avg_time)
+        network.add_monitor(spikes[layer], name='%s_spikes' % layer)
 
     # Train the network.
     if train:
@@ -132,9 +142,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
     else:
         print('\nBegin test.\n')
 
+    inpt_axes = None
+    inpt_ims = None
     spike_ims = None
     spike_axes = None
     weights_im = None
+    assigns_im = None
+    perf_ax = None
 
     start = t()
     for i in range(n_examples):
@@ -146,7 +160,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
+                current_labels = labels[i % len(audio) - update_interval:i % len(audio)]
 
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
@@ -158,10 +172,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
             for scheme in preds:
                 predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
-            # Save accuracies to disk
+            # Save accuracy curves to disk.
             to_write = ['train'] + params if train else ['test'] + params
-            to_write = [str(x) for x in to_write]
-            f = '_'.join(to_write) + '.pt'
+            f = '_'.join([str(x) for x in to_write]) + '.pt'
             torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
             if train:
@@ -175,17 +188,17 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
+                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
 
                 # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
+                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
 
             print()
 
         # Get next input sample.
-        image = images[i].view(-1)
-        sample = poisson(datum=image, time=time)
+        sample = audio[i % len(audio)]
         inpts = {'X': sample}
+        time = min(avg_time, sample.size(0))
 
         # Run the network on the input.
         network.run(inpts=inpts, time=time)
@@ -193,9 +206,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
         retries = 0
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
-            image *= 2
-            sample = poisson(datum=image, time=time)
-            inpts = {'X' : sample}
+            sample *= 2
+            inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
@@ -203,13 +215,18 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
 
         # Optionally plot various simulation information.
         if plot:
-            _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
-                       'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)}
+            # _input = image.view(28, 28)
+            # reconstruction = inpts['X'].view(time, 40).sum(0).view(8, 5)
+            _spikes = {layer: spikes[layer].get('s') for layer in spikes}
+            input_exc_weights = network.connections[('X', 'Y')].w
+            square_weights = get_square_weights(input_exc_weights.view(40, n_neurons), n_sqrt, (8, 5))
+            # square_assignments = get_square_assignments(assignments, n_sqrt)
 
-            spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_locally_connected_weights(
-                network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, 28, im=weights_im
-            )
+            # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
+            weights_im = plot_weights(square_weights, im=weights_im)
+            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
+            # perf_ax = plot_performance(curves, ax=perf_ax)
 
             plt.pause(1e-8)
 
@@ -222,10 +239,10 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
     if i % len(labels) == 0:
         current_labels = labels[-update_interval:]
     else:
-        current_labels = labels[i % len(images) - update_interval:i % len(images)]
+        current_labels = labels[i % len(audio) - update_interval:i % len(audio)]
 
     # Update and print accuracy evaluations.
-    curves, predictions = update_curves(
+    curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
         proportions=proportions, ngram_scores=ngram_scores, n=2
     )
@@ -239,9 +256,10 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
             print('New best accuracy! Saving network parameters to disk.')
 
             # Save network to disk.
-            network.save(os.path.join(params_path, model_name + '.pt'))
-            path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+            if train:
+                network.save(os.path.join(params_path, model_name + '.pt'))
+                path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
+                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
     if train:
         print('\nTraining complete.\n')
@@ -252,10 +270,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
     for scheme in curves.keys():
         print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
-    # Save accuracies to disk
+    # Save accuracy curves to disk.
     to_write = ['train'] + params if train else ['test'] + params
-    to_write = [str(x) for x in to_write]
-    f = '_'.join(to_write) + '.pt'
+    f = '_'.join([str(x) for x in to_write]) + '.pt'
     torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
     # Save results to disk.
@@ -271,19 +288,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
     if not os.path.isfile(os.path.join(results_path, name)):
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
-                f.write('random_seed,kernel_size,stride,n_filters,'
-                        'n_train,inhib,time,timestep,'
-                        'theta_plus,theta_decay,intensity,'
-                        'progress_interval,update_interval,mean_all_activity,'
-                        'mean_proportion_weighting,mean_ngram,max_all_activity,'
-                        'max_proportion_weighting,max_ngram\n')
+                f.write('random_seed,n_neurons,n_train,inhib,timestep,theta_plus,theta_decay,intensity,'
+                        'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                        'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
             else:
-                f.write('random_seed,kernel_size,stride,n_filters,'
-                        'n_train,n_test,inhib,time,timestep,'
-                        'theta_plus,theta_decay,intensity,'
-                        'progress_interval,update_interval,mean_all_activity,'
-                        'mean_proportion_weighting,mean_ngram,max_all_activity,'
-                        'max_proportion_weighting,max_ngram\n')
+                f.write('random_seed,n_neurons,n_train,n_test,inhib,timestep,theta_plus,theta_decay,intensity,'
+                        'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                        'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
 
     with open(os.path.join(results_path, name), 'a') as f:
         f.write(','.join(to_write) + '\n')
@@ -313,17 +324,14 @@ if __name__ == '__main__':
     # Parameters.
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0, help='random seed')
+    parser.add_argument('--n_neurons', type=int, default=100, help='no. of output layer neurons')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=100, help='inhibition connection strength')
-    parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
-    parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
-    parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
-    parser.add_argument('--time', default=100, type=int, help='simulation time')
-    parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
+    parser.add_argument('--inhib', type=float, default=500, help='inhibition connection strength')
+    parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=1 / 40, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
@@ -334,27 +342,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     seed = args.seed
+    n_neurons = args.n_neurons
     n_train = args.n_train
     n_test = args.n_test
     inhib = args.inhib
-    kernel_size = args.kernel_size
-    stride = args.stride
-    n_filters = args.n_filters
-    time = args.time
     dt = args.dt
     theta_plus = args.theta_plus
     theta_decay = args.theta_decay
     intensity = args.intensity
     progress_interval = args.progress_interval
     update_interval = args.update_interval
-    train = args.train
     plot = args.plot
+    train = args.train
     gpu = args.gpu
-
-    if len(kernel_size) == 1:
-        kernel_size = kernel_size[0]
-    if len(stride) == 1:
-        stride = stride[0]
 
     args = vars(args)
 
@@ -365,9 +365,8 @@ if __name__ == '__main__':
 
     print()
 
-    main(seed=seed, n_train=n_train, n_test=n_test, inhib=inhib, kernel_size=kernel_size, stride=stride,
-         n_filters=n_filters, time=time, dt=dt, theta_plus=theta_plus, theta_decay=theta_decay,
-         intensity=intensity, progress_interval=progress_interval, update_interval=update_interval,
-         plot=plot, train=train, gpu=gpu)
+    main(seed=seed, n_neurons=n_neurons, n_train=n_train, n_test=n_test, inhib=inhib, dt=dt,
+         theta_plus=theta_plus, theta_decay=theta_decay, intensity=intensity, progress_interval=progress_interval,
+         update_interval=update_interval, plot=plot, train=train, gpu=gpu)
 
     print()

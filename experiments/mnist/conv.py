@@ -8,11 +8,11 @@ from time import time as t
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.datasets import MNIST
-from bindsnet.network import Network
-from bindsnet.learning import PostPre
+from bindsnet.network import Network, load_network
+from bindsnet.learning import PostPre, NoOp
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
-from bindsnet.evaluation import update_ngram_scores, assign_labels
+from bindsnet.evaluation import assign_labels
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
@@ -34,7 +34,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
+def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filters=25, padding=0, inhib=100,
          time=25, dt=1, intensity=1, progress_interval=10, update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -68,40 +68,47 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     n_classes = 10
     n_neurons = n_filters * np.prod(conv_size)
-    per_class = int(n_neurons / n_classes)
     total_kernel_size = int(np.prod(kernel_size))
     total_conv_size = int(np.prod(conv_size))
 
     # Build network.
-    network = Network()
-    input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
-    conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
-                                   thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0)
-    conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
-    conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
-                                 norm=0.5 * int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
-    conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
-                                  update_rule=None, nu=(0, 1e-2), wmax=2.0)
+    if train:
+        network = Network()
+        input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
+        conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
+                                       thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0)
+        conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
+        conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
+                                     norm=0.5 * int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
+        conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
+                                      update_rule=None, nu=(0, 1e-2), wmax=2.0)
 
-    w = -inhib * torch.ones(n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1])
-    for f in range(n_filters):
-        for i in range(conv_size[0]):
-            for j in range(conv_size[1]):
-                w[f, i, j, f, i, j] = 0
+        w = -inhib * torch.ones(n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1])
+        for f in range(n_filters):
+            for i in range(conv_size[0]):
+                for j in range(conv_size[1]):
+                    w[f, i, j, f, i, j] = 0
 
-    w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
-    recurrent_conn = Connection(conv_layer, conv_layer, w=w)
+        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+        recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
-    network.add_layer(input_layer, name='X')
-    network.add_layer(conv_layer, name='Y')
-    network.add_layer(conv_layer2, name='Y_')
-    network.add_connection(conv_conn, source='X', target='Y')
-    network.add_connection(conv_conn2, source='X', target='Y_')
-    network.add_connection(recurrent_conn, source='Y', target='Y')
+        network.add_layer(input_layer, name='X')
+        network.add_layer(conv_layer, name='Y')
+        network.add_layer(conv_layer2, name='Y_')
+        network.add_connection(conv_conn, source='X', target='Y')
+        network.add_connection(conv_conn2, source='X', target='Y_')
+        network.add_connection(recurrent_conn, source='Y', target='Y')
 
-    # Voltage recording for excitatory and inhibitory layers.
-    voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
-    network.add_monitor(voltage_monitor, name='output_voltage')
+        # Voltage recording for excitatory and inhibitory layers.
+        voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
+        network.add_monitor(voltage_monitor, name='output_voltage')
+    else:
+        network = load_network(os.path.join(params_path, model_name + '.pt'))
+        network.connections['X', 'Y'].update_rule = NoOp(
+            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        )
+        network.layers['Y'].theta_decay = 0
+        network.layers['Y'].theta_plus = 0
 
     # Load MNIST data.
     dataset = MNIST(data_path, download=True)
@@ -121,13 +128,12 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
         proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        ngram_scores = {}
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
+        assignments, proportions, rates = torch.load(open(path, 'rb'))
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'ngram': []}
+    curves = {'all': [], 'proportion': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -155,8 +161,12 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     start = t()
     for i in range(n_examples):
         if i % progress_interval == 0:
-            print('Progress: %d / %d (%.4f seconds)' % (i, n_train, t() - start))
+            print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
             start = t()
+
+            conv_conn.update_rule.nu = (
+                conv_conn.update_rule.nu[0], conv_conn.update_rule.nu[1] * 0.99
+            )
 
         if i % update_interval == 0 and i > 0:
             if i % len(labels) == 0:
@@ -167,7 +177,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
                 curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, ngram_scores=ngram_scores, n=2
+                proportions=proportions
             )
             print_results(curves)
 
@@ -186,14 +196,11 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                     # Save network to disk.
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+                    torch.save((assignments, proportions, rates), open(path, 'wb'))
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
                 assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
-
-                # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
             print()
 
@@ -219,15 +226,17 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         if plot:
             _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
             w = conv_conn.w
-            _spikes = {'X': spikes['X'].get('s').view(28 ** 2, time),
-                       'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
-                       'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)}
+            _spikes = {
+                'X': spikes['X'].get('s').view(28 ** 2, time),
+                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
+                'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
+            }
 
             inpt_axes, inpt_ims = plot_input(
                 image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_conv2d_weights(w, im=weights_im)
+            weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
 
             plt.pause(1e-8)
 
@@ -245,7 +254,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, ngram_scores=ngram_scores, n=2
+        proportions=proportions
     )
     print_results(curves)
 
@@ -259,7 +268,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Save network to disk.
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-            torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+            torch.save((assignments, proportions, rates), open(path, 'wb'))
 
     if train:
         print('\nTraining complete.\n')
@@ -278,8 +287,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
+        np.mean(curves['all']), np.mean(curves['proportion']),
+        np.max(curves['all']), np.max(curves['proportion'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -292,7 +301,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time', 'dt',
                     'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram'
+                    'max_all_activity', 'max_proportion_weighting'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -301,7 +310,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
                     'dt', 'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'mean_ngram', 'max_all_activity', 'max_proportion_weighting', 'max_ngram'
+                    'max_all_activity', 'max_proportion_weighting',
                 ]
 
                 header = ','.join(columns) + '\n'
