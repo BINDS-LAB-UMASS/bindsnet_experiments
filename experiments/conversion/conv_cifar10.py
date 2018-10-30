@@ -18,6 +18,9 @@ params_path = os.path.join('..', '..', 'params', 'cifar10_conversion')
 if not os.path.isdir(params_path):
     os.makedirs(params_path)
 
+if torch.cuda.is_available():
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 
 class LeNet(nn.Module):
 
