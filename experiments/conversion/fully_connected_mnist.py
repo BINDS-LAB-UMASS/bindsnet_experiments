@@ -113,6 +113,7 @@ def main(n_epochs=5, batch_size=100, time=50, update_interval=50, plot=False):
 
         SNN.run(inpts={'Input': images[i].repeat(time, 1, 1)}, time=time)
 
+        spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
         voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
         prediction = torch.softmax(voltages['fc3'].sum(1), 0).argmax()
         correct.append((prediction == labels[i]).item())
@@ -120,6 +121,7 @@ def main(n_epochs=5, batch_size=100, time=50, update_interval=50, plot=False):
         SNN.reset_()
 
         if plot:
+            spikes = {k: spikes[k].cpu() for k in spikes}
             spike_ims, spike_axes = plot_spikes(spikes, ims=spike_ims, axes=spike_axes)
             plt.pause(1e-3)
 

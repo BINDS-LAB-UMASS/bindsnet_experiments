@@ -14,7 +14,7 @@ from bindsnet.conversion import ann_to_snn
 from bindsnet.network.monitors import Monitor
 from bindsnet.analysis.plotting import plot_spikes
 
-params_path = os.path.join('..', '..', 'params', 'cifar10_conversion')
+params_path = os.path.join('..', '..', 'params', 'cifar10_fully_conv')
 if not os.path.isdir(params_path):
     os.makedirs(params_path)
 
@@ -35,12 +35,10 @@ class LeNet(nn.Module):
         self.f = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
             nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
             Flatten(),
-            nn.Linear(in_features=16 * 5 * 5, out_features=120),
+            nn.Linear(in_features=9216, out_features=120),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=120, out_features=84),
             nn.ReLU(inplace=True),
@@ -51,19 +49,26 @@ class LeNet(nn.Module):
         return self.f(x)
 
 
-def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=1000, plot=False, save=True):
+def main(seed=0, n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=1000, plot=False, save=True):
+
+    np.random.seed(seed)
+
+    if torch.cuda.is_available():
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.cuda.manual_seed_all(seed)
+    else:
+        torch.manual_seed(seed)
+
     print()
     print('Loading CIFAR-10 data...')
 
     # Get the CIFAR-10 data.
-    dataset = CIFAR10('../../data/CIFAR10', download=True)
-
-    images, labels = dataset.get_train()
+    images, labels = CIFAR10('../../data/CIFAR10', download=True).get_train()
     images /= images.max()  # Standardizing to [0, 1].
     images = images.permute(0, 3, 1, 2)
     labels = labels.long()
 
-    test_images, test_labels = dataset.get_test()
+    test_images, test_labels = CIFAR10('../../data/CIFAR10', download=True).get_test()
     test_images /= test_images.max()  # Standardizing to [0, 1].
     test_images = test_images.permute(0, 3, 1, 2)
     test_labels = test_labels.long()
@@ -75,7 +80,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
         test_labels = test_labels.cuda()
 
     model_name = '_'.join([
-        str(x) for x in [n_epochs, batch_size, time, update_interval, n_examples]
+        str(x) for x in [seed, n_epochs, batch_size, time, update_interval, n_examples]
     ])
 
     ANN = LeNet()
@@ -93,7 +98,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
         print()
 
         # Specify optimizer and loss function.
-        optimizer = optim.Adam(params=ANN.parameters(), lr=1e-3)
+        optimizer = optim.Adam(params=ANN.parameters(), lr=1e-3, weight_decay=1e-4)
         criterion = nn.CrossEntropyLoss()
 
         batches_per_epoch = int(images.size(0) / batch_size)
@@ -119,19 +124,14 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
                 optimizer.step()
 
                 losses.append(loss.item())
-                accuracies.append(correct.item() * 100)
-
-            mean_loss = np.mean(losses)
-            mean_accuracy = np.mean(accuracies)
+                accuracies.append(correct.item())
 
             outputs = ANN.forward(test_images)
             loss = criterion(outputs, test_labels).item()
             predictions = torch.max(outputs, 1)[1]
             test_accuracy = ((test_labels == predictions).sum().float() / test_labels.numel()).item() * 100
 
-            print(
-                f'Epoch: {i+1} / {n_epochs}; Train Loss: {mean_loss:.4f}; Train Accuracy: {mean_accuracy:.4f}'
-            )
+            print(f'Epoch: {i+1} / {n_epochs}; Train Loss: {np.mean(losses):.4f}; Train Accuracy: {np.mean(accuracies) * 100:.4f}')
             print(f'\tTest Loss: {loss:.4f}; Test Accuracy: {test_accuracy:.4f}')
 
         if save:
@@ -142,6 +142,9 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
     # Do ANN to SNN conversion.
     SNN = ann_to_snn(ANN, input_shape=(1, 3, 32, 32), data=images[:n_examples])
+
+    print(SNN.layers)
+    print({l: SNN.layers[l].shape for l in SNN.layers})
 
     for l in SNN.layers:
         if l != 'Input':
@@ -162,8 +165,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
     for i in range(images.size(0)):
         if i > 0 and i % update_interval == 0:
             print(
-                f'Progress: {i} / {images.size(0)}; Elapsed: {t() - start:.4f}; Accuracy: {np.mean(correct) * 100:.4f}'
-            )
+                f'Progress: {i} / {images.size(0)}; Elapsed: {t() - start:.4f}; Accuracy: {np.mean(correct) * 100:.4f}')
             start = t()
 
         inpts = {'Input': images[i].repeat(time, 1, 1, 1, 1)}
@@ -171,7 +173,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
         spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
         voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-        prediction = torch.softmax(voltages['11'].sum(1), 0).argmax()
+        prediction = torch.softmax(voltages['9'].sum(1), 0).argmax()
         correct.append((prediction == labels[i]).item())
 
         SNN.reset_()
@@ -187,10 +189,11 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--n_epochs', type=int, default=3)
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--time', type=int, default=50)
-    parser.add_argument('--update_interval', type=int, default=10)
+    parser.add_argument('--update_interval', type=int, default=50)
     parser.add_argument('--n_examples', type=int, default=1000)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.add_argument('--no-save', dest='save', action='store_false')
