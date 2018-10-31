@@ -70,8 +70,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     if gpu:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
         torch.cuda.manual_seed_all(seed)
-    else:
-        torch.manual_seed(seed)
+
+    torch.manual_seed(seed)
 
     n_examples = n_train if train else n_test
     n_classes = 10
