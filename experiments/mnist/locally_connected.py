@@ -35,15 +35,25 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], stride=[2], n_filters=25,
-         time=25, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
+def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stride=(2,), n_filters=25,
+         lr_decay=1, time=25, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
          update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                             'No. examples must be divisible by update_interval'
 
+    if len(kernel_size) == 1:
+        kernel_size = kernel_size[0]
+    else:
+        kernel_size = tuple(kernel_size)
+
+    if len(stride) == 1:
+        stride = stride[0]
+    else:
+        stride = tuple(stride)
+
     params = [
-        seed, kernel_size, stride, n_filters, n_train, inhib, time, dt,
+        seed, kernel_size, stride, n_filters, lr_decay, n_train, inhib, time, dt,
         theta_plus, theta_decay, intensity, progress_interval, update_interval
     ]
 
@@ -51,7 +61,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, n_train, n_test, inhib, time, dt,
+            seed, kernel_size, stride, n_filters, lr_decay, n_train, n_test, inhib, time, dt,
             theta_plus, theta_decay, intensity, progress_interval, update_interval
         ]
 
@@ -70,7 +80,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=784, input_shape=[28, 28], kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib,
-            dt=dt, nu_pre=1e-4, nu_post=1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=0.2
+            dt=dt, nu_pre=0, nu_post=(350 / time) * 1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0,
+            wmax=1.0, norm=0.2
         )
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
@@ -143,6 +154,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=[16], strid
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -319,6 +333,7 @@ if __name__ == '__main__':
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
@@ -333,29 +348,6 @@ if __name__ == '__main__':
     parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
 
-    seed = args.seed
-    n_train = args.n_train
-    n_test = args.n_test
-    inhib = args.inhib
-    kernel_size = args.kernel_size
-    stride = args.stride
-    n_filters = args.n_filters
-    time = args.time
-    dt = args.dt
-    theta_plus = args.theta_plus
-    theta_decay = args.theta_decay
-    intensity = args.intensity
-    progress_interval = args.progress_interval
-    update_interval = args.update_interval
-    train = args.train
-    plot = args.plot
-    gpu = args.gpu
-
-    if len(kernel_size) == 1:
-        kernel_size = kernel_size[0]
-    if len(stride) == 1:
-        stride = stride[0]
-
     args = vars(args)
 
     print()
@@ -365,9 +357,6 @@ if __name__ == '__main__':
 
     print()
 
-    main(seed=seed, n_train=n_train, n_test=n_test, inhib=inhib, kernel_size=kernel_size, stride=stride,
-         n_filters=n_filters, time=time, dt=dt, theta_plus=theta_plus, theta_decay=theta_decay,
-         intensity=intensity, progress_interval=progress_interval, update_interval=update_interval,
-         plot=plot, train=train, gpu=gpu)
+    main(**args)
 
     print()

@@ -27,7 +27,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             n_sqrt = int(np.ceil(np.sqrt(int(params[1]))))
             side = int(np.sqrt(network.layers['X'].n))
 
-            w = network.connections[('X', 'Ae')].w
+            w = network.connections['X', 'Y'].w
             w = get_square_weights(w, n_sqrt, side)
             plot_weights(w)
 
