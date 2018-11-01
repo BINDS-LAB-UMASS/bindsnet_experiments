@@ -21,8 +21,11 @@ else:
     device = 'cpu'
 
 results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_conversion')
-if not os.path.isdir(results_path):
-    os.makedirs(results_path)
+params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_conversion')
+
+for p in [results_path, params_path]:
+    if not os.path.isdir(p):
+        os.makedirs(p)
 
 
 class Network(nn.Module):
@@ -57,6 +60,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
     else:
         torch.manual_seed(seed)
 
+    epsilon = 0
+
     print()
     print('Loading the trained ANN...')
     print()
@@ -72,10 +77,10 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
     environment = GymEnvironment('BreakoutDeterministic-v4')
 
     f = f'{seed}_{n_episodes}_states.pt'
-    if os.path.isfile(f'../../params/{f}'):
+    if os.path.isfile(os.path.join(params_path, f)):
         print('Loading pre-gathered observation data...')
 
-        states = torch.load(f'../../params/{f}')
+        states = torch.load(os.path.join(params_path, f))
     else:
         print('Gathering observation data...')
         print()
@@ -96,8 +101,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
                 states.append(encoded)
 
                 q_values = ANN(encoded.view([1, -1]))[0]
-                probs, best_action = policy(q_values, 0)
-
+                probs, best_action = policy(q_values, epsilon)
                 action = np.random.choice(np.arange(len(probs)), p=probs)
 
                 if action == 0:
@@ -114,7 +118,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
                 next_state = torch.clamp(next_obs - obs, min=0)
                 next_state = torch.cat(
-                    (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
+                    (state[:, :, 1:], next_state.view(
+                        [next_state.shape[0], next_state.shape[1], 1]
+                    )), dim=2
                 )
 
                 episode_rewards[i] += reward
@@ -131,7 +137,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
         states = torch.stack(states).view(-1, 6400)
 
-        torch.save(states, f'../../params/{f}')
+        torch.save(states, os.path.join(params_path, f))
 
     print()
     print(f'Collected {states.size(0)} Atari game frames.')
@@ -179,9 +185,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            # action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
-            probs = torch.softmax(voltages['fc2'].sum(1), 0)
-            action = torch.multinomial(probs, 1)
+            action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
 
             if action == 0:
                 noop_counter += 1
