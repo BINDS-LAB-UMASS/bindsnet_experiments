@@ -96,9 +96,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=25, percentile=99.9, plo
                 states.append(encoded)
 
                 q_values = ANN(encoded.view([1, -1]))[0]
-                action_probs, best_action = policy(q_values, 0)
+                probs, best_action = policy(q_values, 0)
 
-                action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+                action = np.random.choice(np.arange(len(probs)), p=probs)
 
                 if action == 0:
                     noop_counter += 1
@@ -179,7 +179,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=25, percentile=99.9, plo
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
+            # action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
+            probs = torch.softmax(voltages['fc2'].sum(1), 0)
+            action = torch.multinomial(probs, 1)
 
             if action == 0:
                 noop_counter += 1
@@ -266,4 +268,3 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     main(**args)
-
