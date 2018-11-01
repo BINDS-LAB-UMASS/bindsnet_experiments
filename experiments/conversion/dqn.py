@@ -17,6 +17,8 @@ from bindsnet.analysis.plotting import plot_spikes, plot_input
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     device = 'cuda'
+else:
+    device = 'cpu'
 
 results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_conversion')
 if not os.path.isdir(results_path):
@@ -96,7 +98,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=25, percentile=99.9, plo
                 q_values = ANN(encoded.view([1, -1]))[0]
                 action_probs, best_action = policy(q_values, 0)
 
-                action = np.random.choice(range(action_probs), p=action_probs)
+                action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
 
                 if action == 0:
                     noop_counter += 1
@@ -258,7 +260,7 @@ if __name__ == '__main__':
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--n_episodes', type=int, default=25)
     parser.add_argument('--n_snn_episodes', type=int, default=25)
-    parser.add_argument('--percentile', type=int, default=99.9)
+    parser.add_argument('--percentile', type=float, default=99.9)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
