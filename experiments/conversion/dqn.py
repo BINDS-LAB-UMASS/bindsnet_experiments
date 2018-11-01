@@ -1,11 +1,10 @@
+import os
+import sys
 import argparse
 import itertools
-import sys
-
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-
-from time import time as _time
 
 import torch
 import torch.nn as nn
@@ -17,6 +16,11 @@ from bindsnet.analysis.plotting import plot_spikes, plot_input
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    device = 'cuda'
+
+results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_conversion')
+if not os.path.isdir(results_path):
+    os.makedirs(results_path)
 
 
 class Network(nn.Module):
@@ -41,7 +45,16 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(time=50, n_episodes=10, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=25, percentile=99.9, plot=False):
+
+    np.random.seed(seed)
+
+    if torch.cuda.is_available():
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.cuda.manual_seed_all(seed)
+    else:
+        torch.manual_seed(seed)
+
     print()
     print('Loading the trained ANN...')
     print()
@@ -56,62 +69,75 @@ def main(time=50, n_episodes=10, plot=False):
 
     environment = GymEnvironment('BreakoutDeterministic-v4')
 
-    print('Gathering observation data...')
+    f = f'{seed}_{n_episodes}_states.pt'
+    if os.path.isfile(f'../../params/{f}'):
+        print('Loading pre-gathered observation data...')
+
+        states = torch.load(f'../../params/{f}')
+    else:
+        print('Gathering observation data...')
+        print()
+
+        episode_rewards = np.zeros(n_episodes)
+        noop_counter = 0
+        total_t = 0
+        states = []
+
+        for i in range(n_episodes):
+            obs = environment.reset().to(device)
+            state = torch.stack([obs] * 4, dim=2)
+
+            for t in itertools.count():
+                encoded = torch.tensor([0.25, 0.5, 0.75, 1]) * state
+                encoded = torch.sum(encoded, dim=2)
+
+                states.append(encoded)
+
+                q_values = ANN(encoded.view([1, -1]))[0]
+                action_probs, best_action = policy(q_values, 0)
+
+                action = np.random.choice(range(action_probs), p=action_probs)
+
+                if action == 0:
+                    noop_counter += 1
+                else:
+                    noop_counter = 0
+
+                if noop_counter >= 20:
+                    action = np.random.choice([0, 1, 2, 3])
+                    noop_counter = 0
+
+                next_obs, reward, done, _ = environment.step(action)
+                next_obs = next_obs.to(device)
+
+                next_state = torch.clamp(next_obs - obs, min=0)
+                next_state = torch.cat(
+                    (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
+                )
+
+                episode_rewards[i] += reward
+                total_t += 1
+
+                if done:
+                    print(f'Step {t} ({total_t}) @ Episode {i + 1} / {n_episodes}')
+                    print(f'Episode Reward: {episode_rewards[i]}')
+
+                    break
+
+                state = next_state
+                obs = next_obs
+
+        states = torch.stack(states).view(-1, 6400)
+
+        torch.save(states, f'../../params/{f}')
+
     print()
-
-    episode_rewards = np.zeros(n_episodes)
-    noop_counter = 0
-    total_t = 0
-    states = []
-
-    for i in range(n_episodes):
-        print(f'Episode progress: {i + 1} / {n_episodes}')
-
-        obs = environment.reset()
-        state = torch.stack([obs] * 4, dim=2)
-
-        for t in itertools.count():
-            encoded = torch.tensor([0.25, 0.5, 0.75, 1]) * state
-            encoded = torch.sum(encoded, dim=2)
-
-            states.append(encoded)
-
-            q_values = ANN(encoded.view([1, -1]))[0]
-            action_probs, best_action = policy(q_values, 0)
-
-            action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
-            if action == 0:
-                noop_counter += 1
-            else:
-                noop_counter = 0
-            if noop_counter >= 20:
-                action = np.random.choice(np.arange(len(action_probs)))
-                noop_counter = 0
-
-            next_obs, reward, done, _ = environment.step(action)
-            next_state = torch.clamp(next_obs - obs, min=0)
-            next_state = torch.cat(
-                (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
-            )
-
-            episode_rewards[i] += reward
-            total_t += 1
-
-            if done:
-                print(f'Step {t} ({total_t}) @ Episode {i}/{n_episodes}')
-                print(f'Episode Reward: {episode_rewards[i]}')
-                break
-
-            state = next_state
-            obs = next_obs
-
-    states = torch.stack(states).view(-1, 6400)
-
+    print(f'Collected {states.size(0)} Atari game frames.')
     print()
     print('Converting ANN to SNN...')
 
     # Do ANN to SNN conversion.
-    SNN = ann_to_snn(ANN, input_shape=(6400,), data=states)
+    SNN = ann_to_snn(ANN, input_shape=(6400,), data=states, percentile=percentile)
 
     for l in SNN.layers:
         if l != 'Input':
@@ -125,7 +151,7 @@ def main(time=50, n_episodes=10, plot=False):
     inpt_axes = None
 
     new_life = True
-    episode_rewards = np.zeros(n_episodes)
+    rewards = np.zeros(n_snn_episodes)
     total_t = 0
     noop_counter = 0
 
@@ -134,8 +160,8 @@ def main(time=50, n_episodes=10, plot=False):
     print()
 
     # Test SNN on Atari Breakout.
-    for i in range(n_episodes):
-        obs = environment.reset()
+    for i in range(n_snn_episodes):
+        obs = environment.reset().to(device)
         state = torch.stack([obs] * 4, dim=2)
         prev_life = 5
 
@@ -166,6 +192,7 @@ def main(time=50, n_episodes=10, plot=False):
                 action = 1
 
             next_obs, reward, done, info = environment.step(action)
+            next_obs = next_obs.to(device)
 
             if prev_life - info["ale.lives"] != 0:
                 new_life = True
@@ -179,8 +206,10 @@ def main(time=50, n_episodes=10, plot=False):
                 (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
             )
 
-            episode_rewards[i] += reward
+            rewards[i] += reward
             total_t += 1
+
+            SNN.reset_()
 
             if plot:
                 # Get voltage recording.
@@ -192,18 +221,44 @@ def main(time=50, n_episodes=10, plot=False):
                 plt.pause(1e-8)
 
             if done:
-                print(f'Step {t} ({total_t}) @ Episode {i}/{n_episodes}')
-                print(f'Episode Reward: {episode_rewards[i]}')
+                print(f'Step {t} ({total_t}) @ Episode {i + 1} / {n_snn_episodes}')
+                print(f'Episode Reward: {rewards[i]}')
+                print()
+
                 break
 
             state = next_state
             obs = next_obs
 
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
+    columns = [
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'rewards'
+    ]
+    data = [[
+        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), rewards
+    ]]
+
+    path = os.path.join(results_path, 'results.csv')
+    if not os.path.isfile(path):
+        df = pd.DataFrame(data=data, index=[model_name], columns=columns)
+    else:
+        df = pd.read_csv(path, index_col=0)
+
+        if model_name not in df.index:
+            df = df.append(pd.DataFrame(data=data, index=[model_name], columns=columns))
+        else:
+            df.loc[model_name] = data[0]
+
+    df.to_csv(path, index=True)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=50)
-    parser.add_argument('--n_episodes', type=int, default=10)
+    parser.add_argument('--n_episodes', type=int, default=25)
+    parser.add_argument('--n_snn_episodes', type=int, default=25)
+    parser.add_argument('--percentile', type=int, default=99.9)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())

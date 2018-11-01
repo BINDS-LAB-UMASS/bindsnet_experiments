@@ -16,3 +16,5 @@ scripts/__pycache__/
 experiments/benchmark/annarchy
 experiments/benchmark/GeNNworkspace
 experiments/benchmark/output
+
+!params/converted_dqn_time_difference_grayscale.pt
