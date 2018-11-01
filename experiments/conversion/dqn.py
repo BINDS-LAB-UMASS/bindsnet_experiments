@@ -47,7 +47,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=25, percentile=99.9, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, plot=False):
 
     np.random.seed(seed)
 
@@ -261,7 +261,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--n_episodes', type=int, default=25)
-    parser.add_argument('--n_snn_episodes', type=int, default=25)
+    parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99.9)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
