@@ -20,8 +20,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_conversion')
-params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_conversion')
+results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_determ')
+params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_determ')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -185,8 +185,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs = torch.softmax(voltages['fc2'].sum(1), 0)
-            action = torch.multinomial(probs, 1)
+            action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
 
             if action == 0:
                 noop_counter += 1
@@ -241,7 +240,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
     model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'rewards'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'reward'
     ]
     data = [[
         seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), rewards
@@ -266,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--n_episodes', type=int, default=25)
-    parser.add_argument('--n_snn_episodes', type=int, default=100)
+    parser.add_argument('--n_snn_episodes', type=int, default=1)
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)

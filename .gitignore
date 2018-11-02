@@ -13,6 +13,8 @@ credentials.yml
 
 scripts/__pycache__/
 
+*.pyc
+
 experiments/benchmark/annarchy
 experiments/benchmark/GeNNworkspace
 experiments/benchmark/output
