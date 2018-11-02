@@ -20,8 +20,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_determ')
-params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_determ')
+results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_eps_greedy')
+params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_eps_greedy')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -50,7 +50,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, percentile=99.9, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False):
 
     np.random.seed(seed)
 
@@ -59,8 +59,6 @@ def main(seed=0, time=50, n_episodes=25, percentile=99.9, plot=False):
         torch.cuda.manual_seed_all(seed)
     else:
         torch.manual_seed(seed)
-
-    epsilon = 0
 
     print()
     print('Loading the trained ANN...')
@@ -159,6 +157,7 @@ def main(seed=0, time=50, n_episodes=25, percentile=99.9, plot=False):
     inpt_axes = None
 
     new_life = True
+    rewards = np.zeros(n_snn_episodes)
     total_t = 0
     noop_counter = 0
 
@@ -167,81 +166,83 @@ def main(seed=0, time=50, n_episodes=25, percentile=99.9, plot=False):
     print()
 
     # Test SNN on Atari Breakout.
-    obs = environment.reset().to(device)
-    state = torch.stack([obs] * 4, dim=2)
-    prev_life = 5
-    total_reward = 0
+    for i in range(n_snn_episodes):
+        obs = environment.reset().to(device)
+        state = torch.stack([obs] * 4, dim=2)
+        prev_life = 5
 
-    for t in itertools.count():
-        sys.stdout.flush()
+        for t in itertools.count():
+            sys.stdout.flush()
 
-        encoded_state = torch.tensor([0.25, 0.5, 0.75, 1]) * state
-        encoded_state = torch.sum(encoded_state, dim=2)
-        encoded_state = encoded_state.view([1, -1]).repeat(time, 1)
+            encoded_state = torch.tensor([0.25, 0.5, 0.75, 1]) * state
+            encoded_state = torch.sum(encoded_state, dim=2)
+            encoded_state = encoded_state.view([1, -1]).repeat(time, 1)
 
-        inpts = {'Input': encoded_state}
-        SNN.run(inpts=inpts, time=time)
+            inpts = {'Input': encoded_state}
+            SNN.run(inpts=inpts, time=time)
 
-        spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
-        voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-        action = torch.softmax(voltages['fc2'].sum(1), 0).argmax()
+            spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
+            voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
+            probs, best_action = policy(voltages['fc2'].sum(1), epsilon)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
 
-        if action == 0:
-            noop_counter += 1
-        else:
-            noop_counter = 0
+            if action == 0:
+                noop_counter += 1
+            else:
+                noop_counter = 0
 
-        if noop_counter >= 20:
-            action = np.random.choice([0, 1, 2, 3])
-            noop_counter = 0
+            if noop_counter >= 20:
+                action = np.random.choice([0, 1, 2, 3])
+                noop_counter = 0
 
-        if new_life:
-            action = 1
+            if new_life:
+                action = 1
 
-        next_obs, reward, done, info = environment.step(action)
-        next_obs = next_obs.to(device)
+            next_obs, reward, done, info = environment.step(action)
+            next_obs = next_obs.to(device)
 
-        if prev_life - info["ale.lives"] != 0:
-            new_life = True
-        else:
-            new_life = False
+            if prev_life - info["ale.lives"] != 0:
+                new_life = True
+            else:
+                new_life = False
 
-        prev_life = info["ale.lives"]
+            prev_life = info["ale.lives"]
 
-        next_state = torch.clamp(next_obs - obs, min=0)
-        next_state = torch.cat(
-            (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
-        )
-
-        total_reward += reward
-        total_t += 1
-
-        SNN.reset_()
-
-        if plot:
-            # Get voltage recording.
-            inpt = encoded_state.view(time, 6400).sum(0).view(80, 80)
-            spike_ims, spike_axes = plot_spikes(
-                {layer: spikes[layer] for layer in spikes}, ims=spike_ims, axes=spike_axes
+            next_state = torch.clamp(next_obs - obs, min=0)
+            next_state = torch.cat(
+                (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
             )
-            inpt_axes, inpt_ims = plot_input(state, inpt, ims=inpt_ims, axes=inpt_axes)
-            plt.pause(1e-8)
 
-        if done:
-            print(f'Episode Reward: {total_reward}')
-            print()
+            rewards[i] += reward
+            total_t += 1
 
-            break
+            SNN.reset_()
 
-        state = next_state
-        obs = next_obs
+            if plot:
+                # Get voltage recording.
+                inpt = encoded_state.view(time, 6400).sum(0).view(80, 80)
+                spike_ims, spike_axes = plot_spikes(
+                    {layer: spikes[layer] for layer in spikes}, ims=spike_ims, axes=spike_axes
+                )
+                inpt_axes, inpt_ims = plot_input(state, inpt, ims=inpt_ims, axes=inpt_axes)
+                plt.pause(1e-8)
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, percentile]])
+            if done:
+                print(f'Step {t} ({total_t}) @ Episode {i + 1} / {n_snn_episodes}')
+                print(f'Episode Reward: {rewards[i]}')
+                print()
+
+                break
+
+            state = next_state
+            obs = next_obs
+
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
     columns = [
-        'seed', 'time', 'n_episodes', 'percentile', 'reward'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'rewards'
     ]
     data = [[
-        seed, time, n_episodes, percentile, total_reward
+        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), rewards
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -263,7 +264,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--n_episodes', type=int, default=25)
+    parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
+    parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
