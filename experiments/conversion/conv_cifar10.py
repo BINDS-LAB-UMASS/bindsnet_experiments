@@ -80,6 +80,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
     ANN = LeNet()
 
+    criterion = nn.CrossEntropyLoss()
     if save and os.path.isfile(os.path.join(params_path, model_name + '.pt')):
         print()
         print('Loading trained ANN from disk...')
@@ -94,7 +95,6 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
         # Specify optimizer and loss function.
         optimizer = optim.Adam(params=ANN.parameters(), lr=1e-3)
-        criterion = nn.CrossEntropyLoss()
 
         batches_per_epoch = int(images.size(0) / batch_size)
 
@@ -149,6 +149,14 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
                 Monitor(SNN.layers[l], state_vars=['s', 'v'], time=time), name=l
             )
 
+    outputs = ANN.forward(images)
+    loss = criterion(outputs, labels)
+    predictions = torch.max(outputs, 1)[1]
+    accuracy = ((labels == predictions).sum().float() / labels.numel()).item() * 100
+
+    print()
+    print(f'(Post training) Training Loss: {loss:.4f}; Training Accuracy: {accuracy:.4f}')
+
     spike_ims = None
     spike_axes = None
     correct = []
@@ -167,11 +175,13 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
             start = t()
 
         inpts = {'Input': images[i].repeat(time, 1, 1, 1, 1)}
+
         SNN.run(inpts=inpts, time=time)
 
-        spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
-        voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-        prediction = torch.softmax(voltages['11'].sum(1), 0).argmax()
+        spikes = {l: SNN.monitors[l].get('s') for l in SNN.monitors}
+        voltages = {l: SNN.monitors[l].get('v') for l in SNN.monitors}
+
+        prediction = torch.softmax(voltages['12'].sum(1), 0).argmax()
         correct.append((prediction == labels[i]).item())
 
         SNN.reset_()
@@ -182,6 +192,7 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
             spike_ims, spike_axes = plot_spikes(
                 {k: spikes[k].cpu() for k in spikes}, ims=spike_ims, axes=spike_axes
             )
+
             plt.pause(1e-3)
 
 

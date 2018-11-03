@@ -33,7 +33,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stride=(2,), n_filters=25, crop=4,
+def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stride=(2,), n_filters=25, crop=4, lr=0.01,
          lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
          update_interval=250, plot=False, train=True, gpu=False):
 
@@ -46,7 +46,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         stride = stride[0]
 
     params = [
-        seed, kernel_size, stride, n_filters, crop, lr_decay, n_train, inhib, time, dt,
+        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
         theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
     ]
 
@@ -54,7 +54,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, crop, lr_decay, n_train, n_test, inhib, time, dt,
+            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
             theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
         ]
 
@@ -75,7 +75,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=(350 / time) * 1e-2, theta_plus=theta_plus,
+            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
             theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
         )
     else:
@@ -283,13 +283,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,lr_decay,n_train,inhib,time,timestep,theta_plus,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,inhib,time,timestep,theta_plus,'
                     'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,lr_decay,n_train,n_test,inhib,time,timestep,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
                     'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
@@ -329,6 +329,7 @@ if __name__ == '__main__':
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
+    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
