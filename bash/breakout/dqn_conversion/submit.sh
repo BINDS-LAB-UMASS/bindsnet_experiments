@@ -18,9 +18,7 @@ source activate py36
 
 echo $seed $time $n_episodes $n_snn_episodes $percentile
 
-python dqn.py --train --seed $seed --time $time --n_episodes $n_episodes \
-              --n_snn_episodes $n_snn_episodes --percentile $percentile
-python dqn.py --test --seed $seed --time $time --n_episodes $n_episodes \
+python dqn.py --seed $seed --time $time --n_episodes $n_episodes \
               --n_snn_episodes $n_snn_episodes --percentile $percentile
 
 exit

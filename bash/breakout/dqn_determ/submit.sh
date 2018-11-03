@@ -10,17 +10,13 @@
 seed=${1:-0}
 time=${2:-50}
 n_episodes=${3:-100}
-n_snn_episodes=${4:-100}
-percentile=${5:-99}
+percentile=${4:-99}
 
 cd ../../../experiments/conversion/
 source activate py36
 
-echo $seed $time $n_episodes $n_snn_episodes $percentile
+echo $seed $time $n_episodes $percentile
 
-python dqn_determ.py --train --seed $seed --time $time --n_episodes $n_episodes \
-                     --n_snn_episodes $n_snn_episodes --percentile $percentile
-python dqn_determ.py --test --seed $seed --time $time --n_episodes $n_episodes \
-                     --n_snn_episodes $n_snn_episodes --percentile $percentile
+python dqn_determ.py --seed $seed --time $time --n_episodes $n_episodes --percentile $percentile
 
 exit
