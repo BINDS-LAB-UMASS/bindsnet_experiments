@@ -2,13 +2,13 @@
 
 for seed in 0
 do
-    for kernel_size in 18 20
+    for kernel_size in 8 10 12 14 16 18 20
     do
-        for stride in 1 2 4
+        for stride in 2 4
         do
             for n_filters in 25 36 49 64 81 100 121 144 169 196 225
             do
-                for crop in 2 4
+                for crop in 4
                 do
                     for n_train in 60000
                     do
