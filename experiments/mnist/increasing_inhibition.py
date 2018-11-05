@@ -23,7 +23,7 @@ from bindsnet.analysis.plotting import plot_spikes, plot_weights, plot_input, pl
 from experiments import ROOT_DIR
 from experiments.utils import print_results, update_curves
 
-model = 'two_level_inhibition'
+model = 'increasing_inhibition'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -37,7 +37,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=2.5, c_high=250, p_low=0.1, time=250, dt=1,
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=1, c_high=25, p_low=0.5, time=250, dt=1,
          theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
          update_interval=250, plot=False, train=True, gpu=False):
 
@@ -68,10 +68,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=2.5, c_high=2
     n_examples = n_train if train else n_test
     n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
     n_classes = 10
-
-    if train:
-        iter_increase = int(n_train * p_low)
-        print(f'Iteration to increase from c_low to c_high: {iter_increase}\n')
 
     # Build network.
     if train:
@@ -159,11 +155,28 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=2.5, c_high=2
     assigns_im = None
     perf_ax = None
 
+    # Calculate linear increase every update interval.
+    if train:
+        n_increase = int(p_low * n_examples) / update_interval
+        increase = (c_high - c_low) / n_increase
+        inhib = c_low
+
     start = t()
     for i in range(n_examples):
-        if train and i == iter_increase:
-            print('\nChanging inhibition from low and graded to high and constant.\n')
-            w = -c_high * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
+        if train and i % update_interval == 0 and i > 0:
+            inhib = inhib + increase
+
+            print(f'\nIncreasing inhibition to {c_low}.\n')
+
+            w = torch.zeros(n_neurons, n_neurons)
+            for k1 in range(n_neurons):
+                for k2 in range(n_neurons):
+                    if k1 != k2:
+                        x1, y1 = k1 // np.sqrt(n_neurons), k1 % np.sqrt(n_neurons)
+                        x2, y2 = k2 // np.sqrt(n_neurons), k2 % np.sqrt(n_neurons)
+
+                        w[k1, k2] = max(-c_high, -inhib * np.sqrt(euclidean([x1, y1], [x2, y2])))
+
             network.connections['Y', 'Y'].w = w
 
         if i % progress_interval == 0:
@@ -341,9 +354,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_neurons', type=int, default=100)
     parser.add_argument('--n_train', type=int, default=60000)
     parser.add_argument('--n_test', type=int, default=10000)
-    parser.add_argument('--c_low', type=float, default=2.5)
-    parser.add_argument('--c_high', type=float, default=250)
-    parser.add_argument('--p_low', type=float, default=0.1)
+    parser.add_argument('--c_low', type=float, default=1)
+    parser.add_argument('--c_high', type=float, default=25)
+    parser.add_argument('--p_low', type=float, default=0.5)
     parser.add_argument('--time', type=int, default=350)
     parser.add_argument('--dt', type=float, default=1.0)
     parser.add_argument('--theta_plus', type=float, default=0.05)
