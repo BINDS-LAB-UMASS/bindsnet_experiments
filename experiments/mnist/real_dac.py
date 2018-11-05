@@ -24,7 +24,6 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_neurons', type=int, default=100)
 parser.add_argument('--n_train', type=int, default=60000)
 parser.add_argument('--n_test', type=int, default=10000)
-parser.add_argument('--excite', type=float, default=22.5)
 parser.add_argument('--inhib', type=float, default=100)
 parser.add_argument('--time', type=int, default=50)
 parser.add_argument('--lr', type=float, default=1e-2)
@@ -32,7 +31,6 @@ parser.add_argument('--lr_decay', type=float, default=0.99)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
-parser.add_argument('--intensity', type=float, default=1e-3)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--train', dest='train', action='store_true')
@@ -46,7 +44,6 @@ seed = args.seed
 n_neurons = args.n_neurons
 n_train = args.n_train
 n_test = args.n_test
-excite = args.excite
 inhib = args.inhib
 time = args.time
 lr = args.lr
@@ -54,7 +51,6 @@ lr_decay = args.lr_decay
 dt = args.dt
 theta_plus = args.theta_plus
 theta_decay = args.theta_decay
-intensity = args.intensity
 progress_interval = args.progress_interval
 update_interval = args.update_interval
 train = args.train
@@ -77,12 +73,12 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
 
 params = [
     seed, n_neurons, n_train, inhib, time, lr, lr_decay, theta_plus,
-    theta_decay, intensity, progress_interval, update_interval
+    theta_decay, progress_interval, update_interval
 ]
 
 test_params = [
     seed, n_neurons, n_train, n_test, inhib, time, lr, lr_decay, theta_plus,
-    theta_decay, intensity, progress_interval, update_interval
+    theta_decay, progress_interval, update_interval
 ]
 
 model_name = '_'.join([str(x) for x in params])
@@ -146,7 +142,7 @@ if train:
 else:
     images, labels = dataset.get_test()
 
-images = images.view(-1, 784) * intensity
+images = images.view(-1, 784)
 
 # if train:
 #     for i in range(n_neurons):
@@ -354,11 +350,11 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,inhib,time,lr,lr_decay,theta_plus,theta_decay,intensity,'
+            f.write('random_seed,n_neurons,n_train,inhib,time,lr,lr_decay,theta_plus,theta_decay,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,lr,lr_decay,theta_plus,theta_decay,intensity,'
+            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,lr,lr_decay,theta_plus,theta_decay,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
 

@@ -15,7 +15,7 @@ from bindsnet.utils import get_square_weights
 from bindsnet.network.topology import Connection
 from bindsnet.network import load_network, Network
 from bindsnet.evaluation import assign_labels, update_ngram_scores
-from bindsnet.network.nodes import IFNodes, Input, DiehlAndCookNodes
+from bindsnet.network.nodes import IFNodes, RealInput, DiehlAndCookNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
 from experiments import ROOT_DIR
@@ -36,20 +36,20 @@ for path in [params_path, curves_path, results_path, confusion_path]:
 
 
 def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01, lr_decay=1, time=350, dt=1,
-         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False,
+         theta_plus=0.05, theta_decay=1e-7, progress_interval=10, update_interval=250, plot=False,
          train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                             'No. examples must be divisible by update_interval'
 
     params = [
-        seed, n_neurons, n_train, inhib, lr_decay, time, dt, theta_plus, theta_decay,
-        intensity, progress_interval, update_interval
+        seed, n_neurons, n_train, inhib, lr_decay, time, dt,
+        theta_plus, theta_decay, progress_interval, update_interval
     ]
 
     test_params = [
-        seed, n_neurons, n_train, n_test, inhib, lr_decay, time, dt, theta_plus,
-        theta_decay, intensity, progress_interval, update_interval
+        seed, n_neurons, n_train, n_test, inhib, lr_decay, time, dt,
+        theta_plus, theta_decay, progress_interval, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
@@ -70,11 +70,11 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
     if train:
         network = Network(dt=dt)
 
-        input_layer = Input(n=784, traces=True, trace_tc=5e-2)
+        input_layer = RealInput(n=784, traces=True, trace_tc=5e-2)
         network.add_layer(input_layer, name='X')
 
         output_layer = DiehlAndCookNodes(
-            n=n_neurons, traces=True, rest=-65.0, reset=-60.0, thresh=-52.0, refrac=5,
+            n=n_neurons, traces=True, rest=0, reset=1, thresh=1, refrac=0,
             decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
         )
         network.add_layer(output_layer, name='Y')
@@ -82,10 +82,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         readout = IFNodes(n=n_classes, reset=0, thresh=1)
         network.add_layer(readout, name='Z')
 
-        w = 0.3 * torch.rand(784, n_neurons)
+        w = torch.rand(784, n_neurons)
         input_connection = Connection(
-            source=input_layer, target=output_layer, w=w, update_rule=MSTDP,
-            nu=lr, wmin=0, wmax=1, norm=78.4
+            source=input_layer, target=output_layer, w=w,
+            update_rule=MSTDP, nu=lr, wmin=0, wmax=1, norm=78.4
         )
         network.add_connection(input_connection, source='X', target='Y')
 
@@ -117,7 +117,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         images, labels = dataset.get_test()
 
     images = images.view(-1, 784)
-    images *= intensity
+    labels = labels.long()
 
     # Record spikes during the simulation.
     spike_record = torch.zeros(update_interval, time, n_neurons)
@@ -125,8 +125,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
     # Neuron assignments and spike proportions.
     if train:
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
+        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         ngram_scores = {}
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
@@ -211,19 +211,17 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
 
         # Get next input sample.
         image = images[i % len(images)]
-        sample = poisson(datum=image, time=time)
-        inpts = {'X': sample}
 
         # Run the network on the input.
-        network.run(inpts=inpts, time=time, reward=1)
+        for j in range(time):
+            readout = network.layers['Z'].s
 
-        retries = 0
-        while spikes['Y'].get('s').sum() < 5 and retries < 3:
-            retries += 1
-            image *= 2
-            sample = poisson(datum=image, time=time)
-            inpts = {'X': sample}
-            network.run(inpts=inpts, time=time, reward=1)
+            if readout[labels[i % len(labels)]]:
+                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=1)
+            elif readout.sum() > 0:
+                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=-1)
+            else:
+                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=0)
 
         # Add to spikes recording.
         spike_record[i % update_interval] = spikes['Y'].get('s').t()
@@ -231,9 +229,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         # Optionally plot various simulation information.
         if plot:
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
-            input_exc_weights = network.connections[('X', 'Y')].w
+            input_exc_weights = network.connections['X', 'Y'].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-            exc_readout_weights = network.connections[('Y', 'Z')].w
+            exc_readout_weights = network.connections['Y', 'Z'].w
 
             # _input = image.view(28, 28)
             # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
@@ -308,14 +306,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
+                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
                     'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
-                    'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
@@ -351,13 +349,12 @@ if __name__ == '__main__':
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
     parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
-    parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=350, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
