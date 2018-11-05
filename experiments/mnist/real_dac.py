@@ -27,6 +27,8 @@ parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--excite', type=float, default=22.5)
 parser.add_argument('--inhib', type=float, default=100)
 parser.add_argument('--time', type=int, default=50)
+parser.add_argument('--lr', type=float, default=1e-2)
+parser.add_argument('--lr_decay', type=float, default=0.99)
 parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--theta_plus', type=float, default=0.05)
 parser.add_argument('--theta_decay', type=float, default=1e-7)
@@ -47,6 +49,8 @@ n_test = args.n_test
 excite = args.excite
 inhib = args.inhib
 time = args.time
+lr = args.lr
+lr_decay = args.lr_decay
 dt = args.dt
 theta_plus = args.theta_plus
 theta_decay = args.theta_decay
@@ -72,12 +76,12 @@ assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                         'No. examples must be divisible by update_interval'
 
 params = [
-    seed, n_neurons, n_train, inhib, time, theta_plus, theta_decay,
-    intensity, progress_interval, update_interval
+    seed, n_neurons, n_train, inhib, time, lr, lr_decay, theta_plus,
+    theta_decay, intensity, progress_interval, update_interval
 ]
 
 test_params = [
-    seed, n_neurons, n_train, n_test, inhib, time, theta_plus,
+    seed, n_neurons, n_train, n_test, inhib, time, lr, lr_decay, theta_plus,
     theta_decay, intensity, progress_interval, update_interval
 ]
 
@@ -107,7 +111,7 @@ if train:
     network.add_layer(input_layer, name='X')
 
     output_layer = DiehlAndCookNodes(
-        n=n_neurons, traces=True, rest=-65.0, reset=-60.0, thresh=-52.0, refrac=5,
+        n=n_neurons, traces=True, rest=0, reset=0, thresh=1, refrac=0,
         decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
     )
     network.add_layer(output_layer, name='Y')
@@ -115,7 +119,7 @@ if train:
     w = 0.3 * torch.rand(784, n_neurons)
     input_connection = Connection(
         source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=PostPre,
-        nu=(1e-4, 1e-1), wmin=0, wmax=1, norm=78.4
+        nu=[0, lr], wmin=0, wmax=1, norm=78.4
     )
     network.add_connection(input_connection, source='X', target='Y')
 
@@ -190,6 +194,9 @@ perf_ax = None
 
 start = t()
 for i in range(n_examples):
+    if i % progress_interval == 0 and train:
+        network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
     if i % progress_interval == 0:
         print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
         start = t()
@@ -347,11 +354,11 @@ else:
 if not os.path.isfile(os.path.join(path, name)):
     with open(os.path.join(path, name), 'w') as f:
         if train:
-            f.write('random_seed,n_neurons,n_train,inhib,time,theta_plus,theta_decay,intensity,'
+            f.write('random_seed,n_neurons,n_train,inhib,time,lr,lr_decay,theta_plus,theta_decay,intensity,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
         else:
-            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,theta_plus,theta_decay,intensity,'
+            f.write('random_seed,n_neurons,n_train,n_test,inhib,time,lr,lr_decay,theta_plus,theta_decay,intensity,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
 
