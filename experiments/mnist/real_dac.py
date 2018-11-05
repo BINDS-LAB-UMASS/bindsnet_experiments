@@ -194,7 +194,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
             print()
 
         # Get next input sample.
-        image = images[i].repeat([time, 1])
+        image = images[i % n_examples].repeat([time, 1])
         inpts = {'X': image}
 
         # Run the network on the input.
@@ -212,7 +212,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
 
         # Optionally plot various simulation information.
         if plot:
-            _input = images[i].view(28, 28)
+            _input = images[i % n_examples].view(28, 28)
             reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
             input_exc_weights = network.connections['X', 'Y'].w
@@ -258,8 +258,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
                 network.save(os.path.join(path, model_name + '.pt'))
                 path = os.path.join(path, '_'.join(['auxiliary', model_name]) + '.pt')
                 torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
-
-            best_accuracy = max([x[-1] for x in curves.values()])
 
     if train:
         print('\nTraining complete.\n')
