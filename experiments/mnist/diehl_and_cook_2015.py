@@ -34,20 +34,21 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr_decay=1, time=350, dt=1, theta_plus=0.05,
-         theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False, train=True, gpu=False):
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=350, dt=1,
+         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False,
+         train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                             'No. examples must be divisible by update_interval'
 
     params = [
-        seed, n_neurons, n_train, inhib, lr_decay, time, dt, theta_plus, theta_decay,
-        intensity, progress_interval, update_interval
+        seed, n_neurons, n_train, inhib, lr, lr_decay, time, dt, theta_plus,
+        theta_decay, intensity, progress_interval, update_interval
     ]
 
     test_params = [
-        seed, n_neurons, n_train, n_test, inhib, lr_decay, time, dt, theta_plus,
-        theta_decay, intensity, progress_interval, update_interval
+        seed, n_neurons, n_train, n_test, inhib, lr, lr_decay, time, dt,
+        theta_plus, theta_decay, intensity, progress_interval, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
@@ -67,8 +68,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr_decay
     # Build network.
     if train:
         network = DiehlAndCook2015v2(
-            n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4, theta_plus=theta_plus,
-            theta_decay=theta_decay, nu_pre=0, nu_post=np.sqrt(350 / time) * 1e-2
+            n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4,
+            theta_plus=theta_plus, theta_decay=theta_decay, nu_pre=0, nu_post=lr
         )
 
     else:
@@ -274,14 +275,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr_decay
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,n_neurons,n_train,inhib,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
+                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,n_neurons,n_train,n_test,inhib,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
-                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
+                    'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
@@ -317,7 +318,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
     parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=350, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')

@@ -96,7 +96,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         network.add_connection(recurrent_connection, source='Y', target='Y')
 
         readout_connection = Connection(
-            source=network.layers['Y'], target=readout, w=torch.rand(n_neurons, n_classes)
+            source=network.layers['Y'], target=readout, w=torch.rand(n_neurons, n_classes), norm=10
         )
         network.add_connection(readout_connection, source='Y', target='Z')
 
@@ -119,28 +119,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
     images = images.view(-1, 784)
     labels = labels.long()
 
-    # Record spikes during the simulation.
-    spike_record = torch.zeros(update_interval, time, n_neurons)
-
-    # Neuron assignments and spike proportions.
-    if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        ngram_scores = {}
-    else:
-        path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
-
-    # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'ngram': []}
-    predictions = {
-        scheme: torch.Tensor().long() for scheme in curves.keys()
-    }
-
-    if train:
-        best_accuracy = 0
-
     spikes = {}
     for layer in set(network.layers) - {'X'}:
         spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
@@ -161,53 +139,16 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
     assigns_im = None
     perf_ax = None
 
+    predictions = torch.zeros(update_interval).long()
+
     start = t()
     for i in range(n_examples):
         if i % progress_interval == 0:
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
             start = t()
 
-        if i % update_interval == 0 and i > 0:
-            if train:
+            if i > 0 and train:
                 network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
-
-            if i % len(labels) == 0:
-                current_labels = labels[-update_interval:]
-            else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-            # Update and print accuracy evaluations.
-            curves, preds = update_curves(
-                curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, ngram_scores=ngram_scores, n=2
-            )
-            print_results(curves)
-
-            for scheme in preds:
-                predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
-
-            # Save accuracy curves to disk.
-            to_write = ['train'] + params if train else ['test'] + params
-            f = '_'.join([str(x) for x in to_write]) + '.pt'
-            torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
-
-            if train:
-                if any([x[-1] > best_accuracy for x in curves.values()]):
-                    print('New best accuracy! Saving network parameters to disk.')
-
-                    # Save network to disk.
-                    network.save(os.path.join(params_path, model_name + '.pt'))
-                    path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
-                    best_accuracy = max([x[-1] for x in curves.values()])
-
-                # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
-
-                # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
-
-            print()
 
         # Get next input sample.
         image = images[i % len(images)]
@@ -217,14 +158,21 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
             readout = network.layers['Z'].s
 
             if readout[labels[i % len(labels)]]:
-                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=1)
-            elif readout.sum() > 0:
-                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=-1)
+                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=1, a_minus=0, a_plus=1)
             else:
                 network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=0)
 
-        # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y'].get('s').t()
+        label = spikes['Z'].get('s').sum(1).argmax()
+        predictions[i % update_interval] = label.long()
+
+        if i > 0 and i % update_interval == 0:
+            if i % len(labels) == 0:
+                current_labels = labels[-update_interval:]
+            else:
+                current_labels = labels[i % len(images) - update_interval:i % len(images)]
+
+            accuracy = 100 * (predictions == current_labels).float().mean().item()
+            print(f'Accuracy over last {update_interval} examples: {accuracy}')
 
         # Optionally plot various simulation information.
         if plot:
@@ -251,92 +199,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
 
     print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
-    i += 1
-
-    if i % len(labels) == 0:
-        current_labels = labels[-update_interval:]
-    else:
-        current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-    # Update and print accuracy evaluations.
-    curves, preds = update_curves(
-        curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, ngram_scores=ngram_scores, n=2
-    )
-    print_results(curves)
-
-    for scheme in preds:
-        predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
-
-    if train:
-        if any([x[-1] > best_accuracy for x in curves.values()]):
-            print('New best accuracy! Saving network parameters to disk.')
-
-            # Save network to disk.
-            if train:
-                network.save(os.path.join(params_path, model_name + '.pt'))
-                path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
-
     if train:
         print('\nTraining complete.\n')
     else:
         print('\nTest complete.\n')
-
-    print('Average accuracies:\n')
-    for scheme in curves.keys():
-        print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
-
-    # Save accuracy curves to disk.
-    to_write = ['train'] + params if train else ['test'] + params
-    f = '_'.join([str(x) for x in to_write]) + '.pt'
-    torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
-
-    # Save results to disk.
-    results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
-    ]
-
-    to_write = params + results if train else test_params + results
-    to_write = [str(x) for x in to_write]
-    name = 'train.csv' if train else 'test.csv'
-
-    if not os.path.isfile(os.path.join(results_path, name)):
-        with open(os.path.join(results_path, name), 'w') as f:
-            if train:
-                f.write(
-                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
-                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
-                )
-            else:
-                f.write(
-                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
-                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
-                )
-
-    with open(os.path.join(results_path, name), 'a') as f:
-        f.write(','.join(to_write) + '\n')
-
-    if labels.numel() > n_examples:
-        labels = labels[:n_examples]
-    else:
-        while labels.numel() < n_examples:
-            if 2 * labels.numel() > n_examples:
-                labels = torch.cat([labels, labels[:n_examples - labels.numel()]])
-            else:
-                labels = torch.cat([labels, labels])
-
-    # Compute confusion matrices and save them to disk.
-    confusions = {}
-    for scheme in predictions:
-        confusions[scheme] = confusion_matrix(labels, predictions[scheme])
-
-    to_write = ['train'] + params if train else ['test'] + test_params
-    f = '_'.join([str(x) for x in to_write]) + '.pt'
-    torch.save(confusions, os.path.join(confusion_path, f))
 
 
 if __name__ == '__main__':

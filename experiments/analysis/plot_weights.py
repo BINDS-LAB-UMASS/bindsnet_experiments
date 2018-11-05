@@ -22,7 +22,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
     network = torch.load(open(f, 'rb'))
 
     if data in ['mnist']:
-        if model in ['diehl_and_cook_2015', 'two_level_inhibition']:
+        if model in ['diehl_and_cook_2015', 'two_level_inhibition', 'real_dac']:
             params = param_string.split('_')
             n_sqrt = int(np.ceil(np.sqrt(int(params[1]))))
             side = int(np.sqrt(network.layers['X'].n))
