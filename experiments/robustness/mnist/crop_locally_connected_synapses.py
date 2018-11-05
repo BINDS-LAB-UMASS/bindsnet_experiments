@@ -19,7 +19,7 @@ from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spik
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
-model = 'crop_locally_connected'
+model = 'crop_locally_connected_synapses'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -75,6 +75,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
     )
     network.layers['Y'].theta_decay = 0
     network.layers['Y'].theta_plus = 0
+    network.connections['X', 'Y'].norm = None
 
     # Destroy `p_destroy` percentage of synapses (set to 0).
     mask = torch.bernoulli(p_destroy * torch.ones(network.connections['X', 'Y'].w.size())).byte()
@@ -141,7 +142,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
                 predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
             # Save accuracy curves to disk.
-            to_write = ['robustness'] + test_params
+            to_write = ['synapse_robustness'] + test_params
             f = '_'.join([str(x) for x in to_write]) + '.pt'
             torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
@@ -207,7 +208,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
         print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
     # Save accuracy curves to disk.
-    f = '_'.join([str(x) for x in ['robustness'] + test_params]) + '.pt'
+    f = '_'.join([str(x) for x in ['synapse_robustness'] + test_params]) + '.pt'
     torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
     # Save results to disk.
@@ -217,7 +218,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
     ]
 
     to_write = [str(x) for x in test_params + results]
-    name = 'robustness.csv'
+    name = 'synapse_robustness.csv'
 
     if not os.path.isfile(os.path.join(results_path, name)):
         with open(os.path.join(results_path, name), 'w') as f:
@@ -244,7 +245,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
     for scheme in predictions:
         confusions[scheme] = confusion_matrix(labels, predictions[scheme])
 
-    f = '_'.join([str(x) for x in ['robustness'] + test_params]) + '.pt'
+    f = '_'.join([str(x) for x in ['synapse_robustness'] + test_params]) + '.pt'
     torch.save(confusions, os.path.join(confusion_path, f))
 
 

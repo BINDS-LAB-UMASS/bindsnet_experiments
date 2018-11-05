@@ -34,13 +34,13 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
         elif model in ['conv']:
             raise NotImplementedError('Automated plotting not yet implemented for "conv" network model.')
 
-        elif model in ['fully_conv', 'locally_connected', 'crop_locally_connected', 'bern_crop_locally_connected']:
+        elif model in ['fully_conv', 'locally_connected', 'crop_locally_connected_synapses', 'bern_crop_locally_connected']:
             params = param_string.split('_')
             kernel_size = int(params[1])
             stride = int(params[2])
             n_filters = int(params[3])
 
-            if model in ['crop_locally_connected', 'bern_crop_locally_connected']:
+            if model in ['crop_locally_connected_synapses', 'bern_crop_locally_connected']:
                 crop = int(params[4])
                 side_length = 28 - crop * 2
             else:
@@ -149,13 +149,13 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             w = get_square_weights(w, n_sqrt, side)
             plot_weights(w)
 
-        elif model in ['crop_locally_connected']:
+        elif model in ['crop_locally_connected_synapses']:
             params = param_string.split('_')
             kernel_size = int(params[1])
             stride = int(params[2])
             n_filters = int(params[3])
 
-            if model in ['crop_locally_connected', 'bern_crop_locally_connected']:
+            if model in ['crop_locally_connected_synapses', 'bern_crop_locally_connected']:
                 crop = int(params[4])
                 side_length = 28 - crop * 2
             else:

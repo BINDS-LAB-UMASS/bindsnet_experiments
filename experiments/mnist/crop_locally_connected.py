@@ -19,7 +19,7 @@ from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spik
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
-model = 'crop_locally_connected'
+model = 'crop_locally_connected_synapses'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
