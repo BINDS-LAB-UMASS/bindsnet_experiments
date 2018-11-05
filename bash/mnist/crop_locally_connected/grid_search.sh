@@ -3,7 +3,7 @@
 n_train=60000
 n_test=10000
 inhib=250
-time=300
+time=250
 theta_plus=0.05
 theta_decay=1e-7
 intensity=0.5
@@ -15,11 +15,11 @@ do
     do
         for stride in 2 4
         do
-            for n_filters in 25 36 49 64 81 100 121 144 169 196
+            for n_filters in 25 50 75 100 125 150
             do
                 for crop in 4
                 do
-                    for lr in 1e-1 1e-2
+                    for lr in 1e-1 5e-2 1e-2 5e-3
                     do
                         for lr_decay in 1 0.99
                         do
