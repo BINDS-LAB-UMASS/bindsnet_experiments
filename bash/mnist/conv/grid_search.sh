@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 for seed in 1
 do
     for n_train in 60000
@@ -8,7 +10,7 @@ do
 			do
 				for stride in 2 4
 				do
-					for n_filters in 9 16 25 36 49 64 81 100
+					for n_filters in 25 50 100 150
 					do
 						for padding in 0
 						do
