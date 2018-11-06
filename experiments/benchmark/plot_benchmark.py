@@ -37,7 +37,8 @@ def main(start=100, stop=1000, step=100, time=1000, interval=100, plot=False):
     plt.xticks(range(0, stop + interval, interval))
     plt.xlabel('Number of input / output neurons')
     plt.ylabel('Simulation time (seconds)')
-    plt.legend(loc=1, prop={'size': 6})
+    plt.legend(loc=1, prop={'size': 5})
+    plt.yscale('log')
 
     plt.savefig(os.path.join(figure_path, name + '.png'))
 
