@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 #SBATCH --partition=longq
-#SBATCH --time=02-00:00:00
-#SBATCH --mem=8000
+#SBATCH --time=05-00:00:00
+#SBATCH --mem=12000
 #SBATCH --account=rkozma
 #SBATCH --output=../../output/crop_locally_connected_%j.out
 #SBATCH --cpus-per-task=8

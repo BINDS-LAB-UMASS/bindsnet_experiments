@@ -4,7 +4,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
-#SBATCH --output=../../output/crop_locally_connected_%j.out
+#SBATCH --output=../../../output/crop_locally_connected_synapses_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}

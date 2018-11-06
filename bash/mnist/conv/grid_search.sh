@@ -21,10 +21,10 @@ do
                         do
                             for lr in 0.01 0.005 0.001
                             do
-                                for lr_decay in 1.0 0.99 0.975
+                                for lr_decay in 1.0 0.99
                                 do
                                     sbatch submit.sh $seed $n_train $n_test $kernel_size $stride $n_filters \
-                                                     $padding $inhib $time $dt $intensity
+                                                     $padding $inhib $time $dt $intensity $lr $lr_decay
                                 done
                             done
                         done

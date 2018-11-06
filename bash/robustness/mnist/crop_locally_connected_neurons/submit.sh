@@ -4,7 +4,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
-#SBATCH --output=../../output/crop_locally_connected_neurons_%j.out
+#SBATCH --output=../../../output/crop_locally_connected_neurons_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}
@@ -34,10 +34,10 @@ python crop_locally_connected_neurons.py --train --seed $seed --kernel_size $ker
                                           --n_filters $n_filters --crop $crop --n_train $n_train --n_test $n_test \
                                           --inhib $inhib --time $time --theta_plus $theta_plus \
                                           --theta_decay $theta_decay --intensity $intensity --norm $norm \
-                                          --lr $lr --lr_decay $lr_decay --p_remove p_remove
+                                          --lr $lr --lr_decay $lr_decay --p_remove $p_remove
 python crop_locally_connected_neurons.py --test --seed $seed --kernel_size $kernel_size --stride $stride \
                                           --n_filters $n_filters --crop $crop --n_train $n_train --n_test $n_test \
                                           --inhib $inhib --time $time --theta_plus $theta_plus \
                                           --theta_decay $theta_decay --intensity $intensity --norm $norm \
-                                          --lr $lr --lr_decay $lr_decay --p_remove p_remove
+                                          --lr $lr --lr_decay $lr_decay --p_remove $p_remove
 exit
