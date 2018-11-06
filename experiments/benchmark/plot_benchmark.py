@@ -17,14 +17,27 @@ def main(start=100, stop=1000, step=100, time=1000, interval=100, plot=False):
     f = os.path.join(benchmark_path, name + '.csv')
     df = pd.read_csv(f, index_col=0)
 
-    for c in df.columns:
-        plt.plot(df[c], label=c)
+    plt.plot(df['BindsNET_cpu'], label='BindsNET (CPU)', linestyle='-', color='b')
+    plt.plot(df['BindsNET_gpu'], label='BindsNET (GPU)', linestyle='-', color='g')
+    plt.plot(df['BRIAN2'], label='BRIAN2', linestyle='--', color='r')
+    plt.plot(df['BRIAN2GENN'], label='brian2genn', linestyle='--', color='c')
+    plt.plot(df['BRIAN2GENN comp.'], label='brian2genn comp.', linestyle=':', color='c')
+    plt.plot(df['PyNEST'], label='PyNEST', linestyle='--', color='y')
+    plt.plot(df['ANNarchy_cpu'], label='ANNarchy (CPU)', linestyle='--', color='m')
+    plt.plot(df['ANNarchy_gpu'], label='ANNarchy (GPU)', linestyle='--', color='k')
+    plt.plot(df['ANNarchy_gpu comp.'], label='ANNarchy (GPU) comp.', linestyle=':', color='k')
+
+    # for c in df.columns:
+    #     if 'BindsNET' in c:
+    #         plt.plot(df[c], label=c, linestyle='-')
+    #     else:
+    #         plt.plot(df[c], label=c, linestyle='--')
 
     plt.title('Benchmark comparison of SNN simulation libraries')
     plt.xticks(range(0, stop + interval, interval))
     plt.xlabel('Number of input / output neurons')
     plt.ylabel('Simulation time (seconds)')
-    plt.legend(loc=1, prop={'size': 8})
+    plt.legend(loc=1, prop={'size': 6})
 
     plt.savefig(os.path.join(figure_path, name + '.png'))
 
