@@ -9,19 +9,19 @@ theta_decay=1e-7
 intensity=0.5
 norm=0.2
 
-for seed in 0
+for seed in 0 1 2 3 4
 do
-    for kernel_size in 10 12 14 16 18
+    for kernel_size in 12
     do
-        for stride in 2 4
+        for stride in 4
         do
-            for n_filters in 25 50 75 100 125 150
+            for n_filters in 150
             do
                 for crop in 4
                 do
-                    for lr in 1e-1 5e-2 1e-2 5e-3
+                    for lr in 1e-2
                     do
-                        for lr_decay in 1 0.99
+                        for lr_decay in 0.99
                         do
                             for p_remove in 0 0.1 0.25 0.5 0.75 0.9
                             do
