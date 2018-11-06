@@ -19,7 +19,7 @@ from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spik
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
-model = 'crop_locally_connected'
+model = 'crop_locally_connected_synapses'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -33,15 +33,20 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stride=(2,), n_filters=25, crop=4,
-         time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
-         update_interval=500, plot=False, train=True, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, crop=4, lr=0.01,
+         lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
+         update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
+    if len(kernel_size) == 1:
+        kernel_size = kernel_size[0]
+    if len(stride) == 1:
+        stride = stride[0]
+
     params = [
-        seed, kernel_size, stride, n_filters, crop, n_train, inhib, time, dt,
+        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
         theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
     ]
 
@@ -49,7 +54,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, crop, n_train, n_test, inhib, time, dt,
+            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
             theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
         ]
 
@@ -70,7 +75,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=1e-4, nu_post=1e-2, theta_plus=theta_plus,
+            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
             theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
         )
     else:
@@ -145,6 +150,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -185,7 +193,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
             print()
 
         # Get next input sample.
-        image = images[i].contiguous().view(-1)
+        image = images[i % update_interval].contiguous().view(-1)
         sample = poisson(datum=image, time=time)
         inpts = {'X': sample}
 
@@ -275,14 +283,14 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,timestep,theta_plus,theta_decay,'
-                    'intensity,norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,inhib,time,timestep,theta_plus,'
+                    'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,timestep,theta_plus,'
-                    'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
+                    'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
@@ -316,11 +324,13 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
+    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
+    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
@@ -328,38 +338,13 @@ if __name__ == '__main__':
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--norm', type=float, default=0.2, help='plastic synaptic weight normalization constant')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
-    parser.add_argument('--update_interval', default=500, type=int, help='no. examples between evaluation')
+    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')
     parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
     parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
-
-    seed = args.seed
-    n_train = args.n_train
-    n_test = args.n_test
-    inhib = args.inhib
-    kernel_size = args.kernel_size
-    stride = args.stride
-    n_filters = args.n_filters
-    crop = args.crop
-    time = args.time
-    dt = args.dt
-    theta_plus = args.theta_plus
-    theta_decay = args.theta_decay
-    intensity = args.intensity
-    norm = args.norm
-    progress_interval = args.progress_interval
-    update_interval = args.update_interval
-    train = args.train
-    plot = args.plot
-    gpu = args.gpu
-
-    if len(kernel_size) == 1:
-        kernel_size = kernel_size[0]
-    if len(stride) == 1:
-        stride = stride[0]
 
     args = vars(args)
 
@@ -370,9 +355,6 @@ if __name__ == '__main__':
 
     print()
 
-    main(seed=seed, n_train=n_train, n_test=n_test, inhib=inhib, kernel_size=kernel_size, stride=stride,
-         n_filters=n_filters, crop=crop, time=time, dt=dt, theta_plus=theta_plus, theta_decay=theta_decay,
-         intensity=intensity, norm=norm, progress_interval=progress_interval,
-         update_interval=update_interval, plot=plot, train=train, gpu=gpu)
+    main(**args)
 
     print()

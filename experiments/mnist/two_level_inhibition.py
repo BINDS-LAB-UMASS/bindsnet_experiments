@@ -37,7 +37,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=5, c_high=250, p_low=0.1, time=250, dt=1,
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=2.5, c_high=250, p_low=0.1, time=250, dt=1,
          theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10,
          update_interval=250, plot=False, train=True, gpu=False):
 
@@ -341,7 +341,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_neurons', type=int, default=100)
     parser.add_argument('--n_train', type=int, default=60000)
     parser.add_argument('--n_test', type=int, default=10000)
-    parser.add_argument('--c_low', type=float, default=5)
+    parser.add_argument('--c_low', type=float, default=2.5)
     parser.add_argument('--c_high', type=float, default=250)
     parser.add_argument('--p_low', type=float, default=0.1)
     parser.add_argument('--time', type=int, default=350)

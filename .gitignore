@@ -13,6 +13,10 @@ credentials.yml
 
 scripts/__pycache__/
 
+*.pyc
+
 experiments/benchmark/annarchy
 experiments/benchmark/GeNNworkspace
 experiments/benchmark/output
+
+!params/converted_dqn_time_difference_grayscale.pt

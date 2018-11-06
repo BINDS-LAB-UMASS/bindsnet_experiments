@@ -18,16 +18,18 @@ inhib=${8:-100.0}
 time=${9:-350}
 dt=${10:-1.0}
 intensity=${11:-1.0}
+lr=${12:-0.01}
+lr_decay=${13:-0.99}
 
 cd ../../../experiments/mnist/
 source activate py36
 
-echo $seed $n_train $n_test $kernel_size $stride $n_filters $padding $inhib $time $dt $intensity
+echo $seed $n_train $n_test $kernel_size $stride $n_filters $padding $inhib $time $dt $intensity $lr $lr_decay
 
 python conv.py --train --seed $seed --n_train $n_train --n_test $n_test --kernel_size $kernel_size \
 			   --stride $stride --n_filters $n_filters --padding $padding --inhib $inhib --time $time \
-			   --dt $dt --intensity $intensity
+			   --dt $dt --intensity $intensity --lr $lr --lr_decay $lr_decay
 python conv.py --test --seed $seed --n_train $n_train --n_test $n_test --kernel_size $kernel_size \
                --stride $stride --n_filters $n_filters --padding $padding --inhib $inhib --time $time \
-               --dt $dt --intensity $intensity
+               --dt $dt --intensity $intensity --lr $lr --lr_decay $lr_decay
 exit

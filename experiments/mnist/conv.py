@@ -34,20 +34,25 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filters=25, padding=0, inhib=100,
-         time=25, dt=1, intensity=1, progress_interval=10, update_interval=250, plot=False, train=True, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
+         time=25, lr=1e-3, lr_decay=0.99, dt=1, intensity=1, progress_interval=10, update_interval=250, plot=False,
+         train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
-    params = [seed, n_train, kernel_size, stride, n_filters,
-              padding, inhib, time, dt, intensity, update_interval]
+    params = [
+        seed, n_train, kernel_size, stride, n_filters, padding,
+        inhib, time, lr, lr_decay, dt, intensity, update_interval
+    ]
 
     model_name = '_'.join([str(x) for x in params])
 
     if not train:
-        test_params = [seed, n_train, n_test, kernel_size, stride, n_filters,
-                       padding, inhib, time, dt, intensity, update_interval]
+        test_params = [
+            seed, n_train, n_test, kernel_size, stride, n_filters, padding,
+            inhib, time, lr, lr_decay, dt, intensity, update_interval
+        ]
 
     np.random.seed(seed)
 
@@ -75,15 +80,23 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
     if train:
         network = Network()
         input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
-        conv_layer = DiehlAndCookNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size),
-                                       thresh=-64.0, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0)
+        conv_layer = DiehlAndCookNodes(
+            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
+            traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+        )
         conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
-        conv_conn = Conv2dConnection(input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
-                                     norm=0.5 * int(np.sqrt(total_kernel_size)), nu=(0, 1e-2), wmax=2.0)
-        conv_conn2 = Conv2dConnection(input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size, stride=stride,
-                                      update_rule=None, nu=(0, 1e-2), wmax=2.0)
+        conv_conn = Conv2dConnection(
+            input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
+            norm=0.5 * int(np.sqrt(total_kernel_size)), nu=[0, lr], wmax=2.0
+        )
+        conv_conn2 = Conv2dConnection(
+            input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
+            stride=stride, update_rule=None, nu=[0, 0], wmax=2.0
+        )
 
-        w = -inhib * torch.ones(n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1])
+        w = -inhib * torch.ones(
+            n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1]
+        )
         for f in range(n_filters):
             for i in range(conv_size[0]):
                 for j in range(conv_size[1]):
@@ -164,11 +177,10 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
             print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
             start = t()
 
-            conv_conn.update_rule.nu = (
-                conv_conn.update_rule.nu[0], conv_conn.update_rule.nu[1] * 0.99
-            )
-
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -225,7 +237,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
         # Optionally plot various simulation information.
         if plot:
             _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
-            w = conv_conn.w
+            w = network.connections['X', 'Y'].w
             _spikes = {
                 'X': spikes['X'].get('s').view(28 ** 2, time),
                 'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
@@ -299,9 +311,9 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 columns = [
-                    'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time', 'dt',
-                    'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'max_all_activity', 'max_proportion_weighting'
+                    'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
+                    'mean_proportion_weighting', 'max_all_activity', 'max_proportion_weighting'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -309,8 +321,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
             else:
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                    'dt', 'intensity', 'update_interval', 'mean_all_activity', 'mean_proportion_weighting',
-                    'max_all_activity', 'max_proportion_weighting',
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
+                    'mean_proportion_weighting', 'max_all_activity', 'max_proportion_weighting',
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -352,6 +364,8 @@ if __name__ == '__main__':
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=100, help='inhibition connection strength')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
+    parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
@@ -372,6 +386,8 @@ if __name__ == '__main__':
     padding = args.padding
     inhib = args.inhib
     time = args.time
+    lr = args.lr
+    lr_decay = args.lr_decay
     dt = args.dt
     intensity = args.intensity
     progress_interval = args.progress_interval
@@ -381,9 +397,14 @@ if __name__ == '__main__':
     gpu = args.gpu
 
     if len(kernel_size) == 1:
-        kernel_size = [kernel_size[0], kernel_size[0]]
+        kernel_size = (kernel_size[0], kernel_size[0])
+    else:
+        kernel_size = tuple(kernel_size)
+
     if len(stride) == 1:
-        stride = [stride[0], stride[0]]
+        stride = (stride[0], stride[0])
+    else:
+        stride = tuple(stride)
 
     args = vars(args)
 
@@ -394,7 +415,7 @@ if __name__ == '__main__':
     print()
 
     main(seed=seed, n_train=n_train, n_test=n_test, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-         padding=padding, inhib=inhib, time=time, dt=dt, intensity=intensity, progress_interval=progress_interval,
-         update_interval=update_interval, plot=plot, train=train, gpu=gpu)
+         padding=padding, inhib=inhib, time=time, lr=lr, lr_decay=lr_decay, dt=dt, intensity=intensity,
+         progress_interval=progress_interval, update_interval=update_interval, plot=plot, train=train, gpu=gpu)
 
     print()

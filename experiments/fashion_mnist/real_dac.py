@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 import argparse
 import numpy as np
@@ -7,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 
-from bindsnet.datasets import MNIST
+from bindsnet.datasets import FashionMNIST
 from bindsnet.learning import PostPre, NoOp
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.topology import Connection
@@ -20,7 +19,7 @@ from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights
 from experiments.utils import update_curves, print_results
 
 model = 'real_dac'
-data = 'mnist'
+data = 'fashion_mnist'
 
 
 def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50, lr=1e-2, lr_decay=0.99, dt=1,
@@ -93,8 +92,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
         network.layers['Y'].theta_decay = 0
         network.layers['Y'].theta_plus = 0
 
-    # Load MNIST data.
-    dataset = MNIST(path=os.path.join('..', '..', 'data', 'MNIST'), download=True)
+    # Load Fashion-MNIST data.
+    dataset = FashionMNIST(path=os.path.join('..', '..', 'data', 'FashionMNIST'), download=True)
 
     if train:
         images, labels = dataset.get_train()
@@ -221,7 +220,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_weights(square_weights, im=weights_im)
+            weights_im = plot_weights(square_weights, im=weights_im, wmax=0.25)
             # assigns_im = plot_assignments(square_assignments, im=assigns_im)
             # perf_ax = plot_performance(curves, ax=perf_ax)
 

@@ -197,6 +197,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=500, dt=1, th
 
         # Get next input sample.
         sample = audio[i % len(audio)]
+        sample = sample[:40, :]
+
         inpts = {'X': sample}
         time = min(avg_time, sample.size(0))
 

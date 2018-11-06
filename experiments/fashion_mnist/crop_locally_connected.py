@@ -82,7 +82,7 @@ for key, value in args.items():
 
 print()
 
-model = 'crop_locally_connected'
+model = 'crop_locally_connected_synapses'
 data = 'fashion_mnist'
 
 top_level = os.path.join('..', '..')
