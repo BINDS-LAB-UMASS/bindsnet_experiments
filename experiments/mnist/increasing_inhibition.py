@@ -159,14 +159,15 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=1, c_high=25,
     if train:
         n_increase = int(p_low * n_examples) / update_interval
         increase = (c_high - c_low) / n_increase
+        increases = 0
         inhib = c_low
 
     start = t()
     for i in range(n_examples):
-        if train and i % update_interval == 0 and i > 0:
+        if train and i % update_interval == 0 and i > 0 and increases < n_increase:
             inhib = inhib + increase
 
-            print(f'\nIncreasing inhibition to {c_low}.\n')
+            print(f'\nIncreasing inhibition to {inhib}.\n')
 
             w = torch.zeros(n_neurons, n_neurons)
             for k1 in range(n_neurons):
@@ -178,6 +179,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=1, c_high=25,
                         w[k1, k2] = max(-c_high, -inhib * np.sqrt(euclidean([x1, y1], [x2, y2])))
 
             network.connections['Y', 'Y'].w = w
+
+            increases += 1
 
         if i % progress_interval == 0:
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
@@ -315,11 +318,11 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, c_low=1, c_high=25,
     if not os.path.isfile(os.path.join(results_path, name)):
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
-                f.write('random_seed,n_neurons,n_train,excite,inhib,time,timestep,theta_plus,theta_decay,'
+                f.write('random_seed,n_neurons,n_train,excite,c_low,c_high,p_low,time,timestep,theta_plus,theta_decay,'
                         'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                         'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
             else:
-                f.write('random_seed,n_neurons,n_train,n_test,excite,inhib,time,timestep,theta_plus,theta_decay,'
+                f.write('random_seed,n_neurons,n_train,n_test,excite,c_low,c_high,p_low,time,timestep,theta_plus,theta_decay,'
                         'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                         'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n')
 

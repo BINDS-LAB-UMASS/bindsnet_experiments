@@ -5,21 +5,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
+
+from torch.nn.modules.utils import _pair
+from scipy.spatial.distance import euclidean
 from sklearn.metrics import confusion_matrix
 
-from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.learning import NoOp, PostPre
 from bindsnet.network.monitors import Monitor
-from bindsnet.models import LocallyConnectedNetwork
+from bindsnet.network import load_network, Network
+from bindsnet.network.nodes import Input, DiehlAndCookNodes
 from bindsnet.evaluation import assign_labels, update_ngram_scores
+from bindsnet.network.topology import LocallyConnectedConnection, Connection
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
 
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
-model = 'crop_locally_connected'
+model = 'increasing_crop_locally_connected'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -33,20 +37,15 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, crop=4, lr=0.01,
-         lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
-         update_interval=250, plot=False, train=True, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, c_low=1, c_high=25, p_low=0.5, kernel_size=(16,), stride=(2,),
+         n_filters=25, crop=4, lr=0.01, lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1,
+         norm=0.2, progress_interval=10, update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
-    if len(kernel_size) == 1:
-        kernel_size = kernel_size[0]
-    if len(stride) == 1:
-        stride = stride[0]
-
     params = [
-        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
+        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, c_low, c_high, p_low, time, dt,
         theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
     ]
 
@@ -54,7 +53,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
+            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, c_low, c_high, p_low, time, dt,
             theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
         ]
 
@@ -68,16 +67,51 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     side_length = 28 - crop * 2
     n_inpt = side_length ** 2
+    input_shape = [side_length, side_length]
     n_examples = n_train if train else n_test
     n_classes = 10
 
+    if _pair(kernel_size) == input_shape:
+        conv_size = [1, 1]
+    else:
+        conv_size = (int((input_shape[0] - _pair(kernel_size)[0]) / _pair(stride)[0]) + 1,
+                     int((input_shape[1] - _pair(kernel_size)[1]) / _pair(stride)[1]) + 1)
+
     # Build network.
     if train:
-        network = LocallyConnectedNetwork(
-            n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
-            theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
+        network = Network()
+
+        input_layer = Input(n=n_inpt, traces=True, trace_tc=5e-2)
+        output_layer = DiehlAndCookNodes(
+            n=n_filters * conv_size[0] * conv_size[1], traces=True, rest=-65.0, reset=-60.0,
+            thresh=-52.0, refrac=5, decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
         )
+        input_output_conn = LocallyConnectedConnection(
+            input_layer, output_layer, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
+            nu=[0, lr], update_rule=PostPre, wmin=0, wmax=1, norm=norm, input_shape=input_shape
+        )
+
+        w = torch.zeros(n_filters, *conv_size, n_filters, *conv_size)
+        for fltr1 in range(n_filters):
+            for fltr2 in range(n_filters):
+                if fltr1 != fltr2:
+                    for j in range(conv_size[0]):
+                        for k in range(conv_size[1]):
+                            x1, y1 = fltr1 // np.sqrt(n_filters), fltr1 % np.sqrt(n_filters)
+                            x2, y2 = fltr2 // np.sqrt(n_filters), fltr2 % np.sqrt(n_filters)
+
+                            w[fltr1, j, k, fltr2, j, k] = max(-c_high, -c_low * np.sqrt(euclidean([x1, y1], [x2, y2])))
+
+        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+        recurrent_conn = Connection(output_layer, output_layer, w=w)
+
+        plt.matshow(w)
+        plt.colorbar()
+
+        network.add_layer(input_layer, name='X')
+        network.add_layer(output_layer, name='Y')
+        network.add_connection(input_output_conn, source='X', target='Y')
+        network.add_connection(recurrent_conn, source='Y', target='Y')
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -143,6 +177,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     spike_axes = None
     weights_im = None
 
+    # Calculate linear increase every update interval.
+    if train:
+        n_increase = int(p_low * n_examples) / update_interval
+        increase = (c_high - c_low) / n_increase
+        increases = 0
+        inhib = c_low
+
     start = t()
     for i in range(n_examples):
         if i % progress_interval == 0:
@@ -152,6 +193,25 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         if i % update_interval == 0 and i > 0:
             if train:
                 network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
+                if increases < n_increase:
+                    inhib = inhib + increase
+
+                    print(f'\nIncreasing inhibition to {inhib}.\n')
+
+                    w = torch.zeros(n_filters, *conv_size, n_filters, *conv_size)
+                    for fltr1 in range(n_filters):
+                        for fltr2 in range(n_filters):
+                            if fltr1 != fltr2:
+                                for j in range(conv_size[0]):
+                                    for k in range(conv_size[1]):
+                                        x1, y1 = fltr1 // np.sqrt(n_filters), fltr1 % np.sqrt(n_filters)
+                                        x2, y2 = fltr2 // np.sqrt(n_filters), fltr2 % np.sqrt(n_filters)
+
+                                        w[fltr1, j, k, fltr2, j, k] = max(-c_high, -c_low * np.sqrt(euclidean([x1, y1], [x2, y2])))
+
+                    w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+                    network.connections['Y', 'Y'].w = w
 
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
@@ -283,13 +343,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,inhib,time,timestep,theta_plus,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,c_low,c_high,p_low,time,timestep,theta_plus,'
                     'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,c_low,c_high,p_low,time,timestep,'
                     'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
@@ -324,7 +384,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
+    parser.add_argument('--c_low', type=float, default=1)
+    parser.add_argument('--c_high', type=float, default=25)
+    parser.add_argument('--p_low', type=float, default=0.5)
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')

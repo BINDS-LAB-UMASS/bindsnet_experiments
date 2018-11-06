@@ -73,7 +73,7 @@ for key, value in args.items():
 
 print()
 
-model = 'crop_locally_connected_synapses'
+model = 'crop_locally_connected'
 data = 'breakout'
 
 top_level = os.path.join('..', '..')
