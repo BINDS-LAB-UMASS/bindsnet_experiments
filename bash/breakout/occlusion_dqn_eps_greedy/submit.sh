@@ -4,7 +4,7 @@
 #SBATCH --time=01-00:00:00
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
-#SBATCH --output=../../output/dqn_eps_greedy_%j.out
+#SBATCH --output=../../output/occlusion_dqn_eps_greedy_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}
@@ -19,8 +19,8 @@ source activate py36
 
 echo $seed $time $n_episodes $n_snn_episodes $percentile $occlusion
 
-python dqn_eps_greedy.py --seed $seed --time $time --n_episodes $n_episodes \
-                         --n_snn_episodes $n_snn_episodes --percentile $percentile \
-                         --occlusion $occlusion
+python occlusion_dqn_eps_greedy.py --seed $seed --time $time --n_episodes $n_episodes \
+                                   --n_snn_episodes $n_snn_episodes --percentile $percentile \
+                                   --occlusion $occlusion
 
 exit
