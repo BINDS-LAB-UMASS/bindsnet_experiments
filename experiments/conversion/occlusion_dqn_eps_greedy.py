@@ -22,8 +22,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'dqn_eps_greedy')
-params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'dqn_eps_greedy')
+results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'occlusion_dqn_eps_greedy')
+params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'occlusion_dqn_eps_greedy')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -52,7 +52,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, occlusion=0, plot=False):
 
     np.random.seed(seed)
 
@@ -70,7 +70,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     ANN = Network()
     ANN.load_state_dict(
         torch.load(
-            '../../params/converted_dqn_time_difference_grayscale.pt'
+            os.path.join(ROOT_DIR, 'params', 'converted_dqn_time_difference_grayscale.pt')
         )
     )
 
@@ -178,6 +178,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             encoded_state = torch.tensor([0.25, 0.5, 0.75, 1]) * state
             encoded_state = torch.sum(encoded_state, dim=2)
+            encoded_state[77 - occlusion: 80 - occlusion] = 0
             encoded_state = encoded_state.view([1, -1]).repeat(time, 1)
 
             inpts = {'Input': encoded_state}
@@ -185,7 +186,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs, best_action = policy(voltages['fc2'].sum(1), epsilon)
+            probs, best_action = policy(voltages['3'].sum(1), epsilon)
             action = np.random.choice(np.arange(len(probs)), p=probs)
 
             if action == 0:
@@ -269,6 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--epsilon', type=float, default=0.05)
+    parser.add_argument('--occlusion', type=int, default=0)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())

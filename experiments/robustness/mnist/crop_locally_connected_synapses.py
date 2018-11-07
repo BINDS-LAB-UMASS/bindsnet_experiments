@@ -33,9 +33,9 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, crop=4, lr=0.01,
-         lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
-         update_interval=250, p_destroy=0.1, plot=False, gpu=False):
+def main(seed=0, n_train=60000, inhib=250.0, kernel_size=(16,), stride=(2,), n_filters=25, crop=4, lr=0.01,
+         lr_decay=1, time=100.0, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
+         update_interval=250, p_destroy=0.1, new_seed=0, plot=False, gpu=False):
 
     assert n_train % update_interval == 0, 'No. examples must be divisible by update_interval'
 
@@ -51,18 +51,18 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
 
     test_params = [
         seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
-        theta_plus, theta_decay, intensity, norm, progress_interval, update_interval, p_destroy
+        theta_plus, theta_decay, intensity, norm, progress_interval, update_interval, p_destroy, new_seed
     ]
 
     model_name = '_'.join([str(x) for x in params])
 
-    np.random.seed(seed)
+    np.random.seed(new_seed)
 
     if gpu:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        torch.cuda.manual_seed_all(seed)
+        torch.cuda.manual_seed_all(new_seed)
     else:
-        torch.manual_seed(seed)
+        torch.manual_seed(new_seed)
 
     side_length = 28 - crop * 2
     n_examples = 10000
@@ -149,7 +149,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
             print()
 
         # Get next input sample.
-        image = images[i % update_interval].contiguous().view(-1)
+        image = images[i % len(images)].contiguous().view(-1)
         sample = poisson(datum=image, time=time)
         inpts = {'X': sample}
 
@@ -224,7 +224,7 @@ def main(seed=0, n_train=60000, inhib=250, kernel_size=(16,), stride=(2,), n_fil
         with open(os.path.join(results_path, name), 'w') as f:
             f.write(
                 'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,inhib,time,timestep,'
-                'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,p_destroy,mean_all_activity,'
+                'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,p_destroy,new_seed,mean_all_activity,'
                 'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
             )
 
@@ -256,22 +256,23 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
-    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
+    parser.add_argument('--inhib', type=float, default=250.0, help='inhibition connection strength')
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
     parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1.0, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--norm', type=float, default=0.2, help='plastic synaptic weight normalization constant')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--p_destroy', default=0.1, type=float, help='percent synapses to destroy')
+    parser.add_argument('--new_seed', default=0, type=int, help='random seed for this robustness test')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
     parser.set_defaults(plot=False, gpu=False)

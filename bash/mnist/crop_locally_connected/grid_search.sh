@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-n_train=60000
+n_train=120000
 n_test=10000
 inhib=250
 time=250
@@ -21,7 +21,7 @@ do
                 do
                     for lr in 1e-2 7.5e-3 5e-3 2.5e-3 1e-3
                     do
-                        for lr_decay in 1 0.99 0.975
+                        for lr_decay in 1 0.99 0.9825 0.975
                         do
                             sbatch submit.sh $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib \
                                              $time $theta_plus $theta_decay $intensity $norm $lr $lr_decay
