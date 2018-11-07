@@ -22,7 +22,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'dqn_eps_greedy')
+results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'occlusion_dqn_eps_greedy')
 params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'occlusion_dqn_eps_greedy')
 
 for p in [results_path, params_path]:
