@@ -149,7 +149,7 @@ def main(seed=0, n_train=60000, inhib=250.0, kernel_size=(16,), stride=(2,), n_f
             print()
 
         # Get next input sample.
-        image = images[i % update_interval].contiguous().view(-1)
+        image = images[i % len(images)].contiguous().view(-1)
         sample = poisson(datum=image, time=time)
         inpts = {'X': sample}
 
