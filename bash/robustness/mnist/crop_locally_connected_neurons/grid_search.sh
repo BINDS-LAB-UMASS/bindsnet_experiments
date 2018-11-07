@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
+seed=0
 n_train=60000
 n_test=10000
-inhib=250
+inhib=250.0
 time=250
 theta_plus=0.05
 theta_decay=1e-7
 intensity=0.5
 norm=0.2
 
-for seed in 0 1 2 3 4
+for new_seed in 0 1 2 3 4
 do
     for kernel_size in 12
     do
@@ -27,7 +28,7 @@ do
                             do
                                 sbatch submit.sh $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib \
                                                  $time $theta_plus $theta_decay $intensity $norm $lr $lr_decay \
-                                                 $p_remove
+                                                 $p_remove $new_seed
                             done
                         done
                     done

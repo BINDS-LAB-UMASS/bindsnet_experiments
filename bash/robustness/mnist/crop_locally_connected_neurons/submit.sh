@@ -23,16 +23,17 @@ norm=${13:-0.2}
 lr=${14:-0.01}
 lr_decay=${15:-1}
 p_remove=${16:-0.1}
+new_seed=${17:-0}
 
 cd ../../../../experiments/robustness/mnist/
 source activate py36
 
 echo $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib $time $theta_plus $theta_decay $intensity \
-     $norm $lr $lr_decay $p_remove
+     $norm $lr $lr_decay $p_remove $new_seed
 
 python crop_locally_connected_neurons.py --seed $seed --kernel_size $kernel_size --stride $stride \
                                          --n_filters $n_filters --crop $crop --n_train $n_train \
                                          --inhib $inhib --time $time --theta_plus $theta_plus \
                                          --theta_decay $theta_decay --intensity $intensity --norm $norm \
-                                         --lr $lr --lr_decay $lr_decay --p_remove $p_remove
+                                         --lr $lr --lr_decay $lr_decay --p_remove $p_remove --new_seed $new_seed
 exit
