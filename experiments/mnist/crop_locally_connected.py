@@ -40,11 +40,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
-    if len(kernel_size) == 1:
-        kernel_size = kernel_size[0]
-    if len(stride) == 1:
-        stride = stride[0]
-
     params = [
         seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
         theta_plus, theta_decay, intensity, norm, progress_interval, update_interval

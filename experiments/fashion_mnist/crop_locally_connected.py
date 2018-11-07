@@ -192,8 +192,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             print()
 
         # Get next input sample.
-        image = images[i].contiguous().view(-1)
-        inpts = {'X': image.repeat(time, 1)}
+        image = images[i % len(images)].contiguous().view(-1)
+        sample = poisson(datum=image, time=time)
+        inpts = {'X': sample}
 
         # Run the network on the input.
         network.run(inpts=inpts, time=time)
@@ -202,7 +203,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
             image *= 2
-            inpts = {'X': image.repeat(time, 1)}
+            sample = poisson(datum=image, time=time)
+            inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
