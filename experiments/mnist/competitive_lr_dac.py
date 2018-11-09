@@ -83,11 +83,10 @@ class CompetitivePost(LearningRule):
             source_x, target_s
         )
 
-        if target_s.sum() > 0 and not self.first:
-            self.nu[1][~target_s.byte()] = 0
-            self.first = True
-
-        # self.nu[1] -= 0.1 * (self.nu[1] - self.lr[1])
+        if not self.first:
+            if target_s.sum() > 0:
+                self.nu[1][~target_s.byte()] = 0
+                self.first = True
 
         self.connection.w = self.connection.w.view(*shape)
 
