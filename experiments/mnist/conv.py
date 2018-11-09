@@ -6,13 +6,14 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import LogisticRegression
 
 from bindsnet.datasets import MNIST
 from bindsnet.network import Network, load_network
 from bindsnet.learning import PostPre, NoOp
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
-from bindsnet.evaluation import assign_labels
+from bindsnet.evaluation import assign_labels, logreg_fit
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
@@ -141,12 +142,20 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
         proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model.coef_ = np.zeros([n_classes, n_neurons])
+        logreg_model.intercept_ = np.zeros(n_classes)
+        logreg_model.classes_ = np.arange(n_classes)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates = torch.load(open(path, 'rb'))
+        assignments, proportions, rates, logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
+        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model.coef_ = logreg_coef
+        logreg_model.intercept_ = logreg_intercept
+        logreg_model.classes_ = np.arange(n_classes)
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': []}
+    curves = {'all': [], 'proportion': [], 'logreg': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -189,7 +198,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
                 curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions
+                proportions=proportions, logreg=logreg_model
             )
             print_results(curves)
 
@@ -208,11 +217,18 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                     # Save network to disk.
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates), open(path, 'wb'))
+                    torch.save(
+                        (
+                            assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
+                        ), open(path, 'wb')
+                    )
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
                 assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
+
+                # Refit logistic regression model.
+                logreg_model = logreg_fit(spike_record, current_labels, logreg_model)
 
             print()
 
@@ -266,7 +282,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions
+        proportions=proportions, logreg=logreg_model
     )
     print_results(curves)
 
@@ -280,7 +296,11 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             # Save network to disk.
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-            torch.save((assignments, proportions, rates), open(path, 'wb'))
+            torch.save(
+                (
+                    assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
+                ), open(path, 'wb')
+            )
 
     if train:
         print('\nTraining complete.\n')
@@ -299,8 +319,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']),
-        np.max(curves['all']), np.max(curves['proportion'])
+        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['logreg']),
+        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['logreg'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -313,7 +333,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
                     'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'max_all_activity', 'max_proportion_weighting'
+                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
+                    'max_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -322,7 +343,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
                     'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'max_all_activity', 'max_proportion_weighting',
+                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
+                    'max_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'

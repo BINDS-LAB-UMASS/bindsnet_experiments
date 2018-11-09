@@ -36,11 +36,12 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-class CompetitivePostPre(LearningRule):
+class CompetitivePost(LearningRule):
     # language=rst
     """
-    Simple STDP rule involving both pre- and post-synaptic spiking activity. The pre-synaptic update is negative, while
-    the post-synpatic update is positive.
+    Competitive STDP rule involving post-synaptic spiking activity. The post-synpatic update is positive, and all other
+    post-synaptic learning rates are set to zero on first spike, and decay back to their original value with an
+    exponential time course.
     """
 
     def __init__(self, connection: AbstractConnection,
@@ -59,7 +60,8 @@ class CompetitivePostPre(LearningRule):
             connection=connection, nu=nu, weight_decay=weight_decay
         )
 
-        self.lr = [torch.clone(nu[0]), torch.clone(nu[1])]
+        self.lr = [torch.clone(self.nu[0]), torch.clone(self.nu[1])]
+        self.first = False
 
         assert self.source.traces and self.target.traces, 'Both pre- and post-synaptic nodes must record spike traces.'
 
@@ -81,10 +83,11 @@ class CompetitivePostPre(LearningRule):
             source_x, target_s
         )
 
-        if target_s.sum() > 0:
+        if target_s.sum() > 0 and not self.first:
             self.nu[1][~target_s.byte()] = 0
+            self.first = True
 
-        self.nu[1] -= 0.1 * (self.nu[1] - self.lr[1])
+        # self.nu[1] -= 0.1 * (self.nu[1] - self.lr[1])
 
         self.connection.w = self.connection.w.view(*shape)
 
@@ -135,7 +138,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, lr=1e-2, lr_decay=1
 
         w = 0.3 * torch.rand(784, n_neurons)
         input_connection = Connection(
-            source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=CompetitivePostPre,
+            source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=CompetitivePost,
             nu=[torch.zeros(784), lr * torch.ones(n_neurons)], wmin=0, wmax=1, norm=78.4
         )
         network.add_connection(input_connection, source='X', target='Y')
@@ -202,14 +205,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, lr=1e-2, lr_decay=1
 
     start = t()
     for i in range(n_examples):
-        if train:
-            network.connections['X', 'Y'].update_rule.lr[1] *= lr_decay
-
         if i % progress_interval == 0:
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.lr[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -255,6 +258,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, lr=1e-2, lr_decay=1
 
         # Run the network on the input.
         network.run(inpts=inpts, time=time)
+
+        if train:
+            input_connection.update_rule.nu[1] = input_connection.update_rule.lr[1].clone()
+            input_connection.update_rule.first = False
 
         retries = 0
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
