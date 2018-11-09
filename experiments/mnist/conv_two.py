@@ -35,24 +35,24 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
-         time=25, lr=1e-3, lr_decay=0.99, dt=1, intensity=1, progress_interval=10, update_interval=250, plot=False,
-         train=True, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), kernel_size2=(4,), stride=(4,), stride2=(2,),
+         n_filters=25, padding=0, inhib=100, time=100, lr=1e-3, lr_decay=0.99, dt=1, intensity=1, progress_interval=10,
+         update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
     params = [
-        seed, n_train, kernel_size, stride, n_filters, padding,
-        inhib, time, lr, lr_decay, dt, intensity, update_interval
+        seed, n_train, kernel_size, kernel_size2, stride, stride2, n_filters,
+        padding, inhib, time, lr, lr_decay, dt, intensity, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
 
     if not train:
         test_params = [
-            seed, n_train, n_test, kernel_size, stride, n_filters, padding,
-            inhib, time, lr, lr_decay, dt, intensity, update_interval
+            seed, n_train, n_test, kernel_size, kernel_size2, stride, stride2,
+            n_filters, padding, inhib, time, lr, lr_decay, dt, intensity, update_interval
         ]
 
     np.random.seed(seed)
@@ -69,13 +69,26 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     if kernel_size == input_shape:
         conv_size = [1, 1]
     else:
-        conv_size = (int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
-                     int((input_shape[1] - kernel_size[1]) / stride[1]) + 1)
+        conv_size = (
+            int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
+            int((input_shape[1] - kernel_size[1]) / stride[1]) + 1
+        )
+
+    if kernel_size2 == conv_size:
+        conv_size2 = [1, 1]
+    else:
+        conv_size2 = (
+            int((conv_size[0] - kernel_size2[0]) / stride2[0]) + 1,
+            int((conv_size[1] - kernel_size2[1]) / stride2[1]) + 1
+        )
 
     n_classes = 10
-    n_neurons = n_filters * np.prod(conv_size)
     total_kernel_size = int(np.prod(kernel_size))
     total_conv_size = int(np.prod(conv_size))
+    n_neurons = n_filters * total_conv_size
+    total_kernel_size2 = int(np.prod(kernel_size2))
+    total_conv_size2 = int(np.prod(conv_size2))
+    n_neurons2 = n_filters * total_conv_size2
 
     # Build network.
     if train:
@@ -83,16 +96,18 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
         conv_layer = DiehlAndCookNodes(
             n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
-            traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+            traces=True, theta_plus=0.05, refrac=0
         )
-        conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
+        conv_layer_prime = LIFNodes(
+            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0, traces=True
+        )
         conv_conn = Conv2dConnection(
             input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
             norm=0.5 * int(np.sqrt(total_kernel_size)), nu=[0, lr], wmax=2.0
         )
-        conv_conn2 = Conv2dConnection(
-            input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
-            stride=stride, update_rule=None, nu=[0, 0], wmax=2.0
+        conv_conn_prime = Conv2dConnection(
+            input_layer, conv_layer_prime, w=conv_conn.w,
+            kernel_size=kernel_size, stride=stride, nu=[0, 0], wmax=2.0
         )
 
         w = -inhib * torch.ones(
@@ -106,23 +121,56 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
         recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
+        conv_layer2 = DiehlAndCookNodes(
+            n=n_filters * total_conv_size2, shape=(1, n_filters, *conv_size2),
+            thresh=-64.0, traces=True, theta_plus=0.05, refrac=0
+        )
+        conv_layer2_prime = LIFNodes(
+            n=n_filters * total_conv_size2, shape=(1, n_filters, *conv_size2), refrac=0
+        )
+        conv_conn2 = Conv2dConnection(
+            conv_layer_prime, conv_layer2, kernel_size=kernel_size2, stride=stride2, update_rule=PostPre,
+            norm=0.25 * int(np.sqrt(total_kernel_size2)), nu=[0, lr], wmax=2.0
+        )
+        conv_conn2_prime = Conv2dConnection(
+            conv_layer_prime, conv_layer2_prime, w=conv_conn2.w,
+            kernel_size=kernel_size2, stride=stride2, nu=[0, 0], wmax=2.0
+        )
+
+        w = -inhib * torch.ones(
+            n_filters, conv_size2[0], conv_size2[1], n_filters, conv_size2[0], conv_size2[1]
+        )
+        for f in range(n_filters):
+            for i in range(conv_size2[0]):
+                for j in range(conv_size2[1]):
+                    w[f, i, j, f, i, j] = 0
+
+        w = w.view(n_filters * conv_size2[0] * conv_size2[1], n_filters * conv_size2[0] * conv_size2[1])
+        recurrent_conn2 = Connection(conv_layer2, conv_layer2, w=w)
+
         network.add_layer(input_layer, name='X')
         network.add_layer(conv_layer, name='Y')
-        network.add_layer(conv_layer2, name='Y_')
+        network.add_layer(conv_layer_prime, name='Y_')
+        network.add_layer(conv_layer2, name='Z')
+        network.add_layer(conv_layer2_prime, name='Z_')
+
         network.add_connection(conv_conn, source='X', target='Y')
-        network.add_connection(conv_conn2, source='X', target='Y_')
+        network.add_connection(conv_conn_prime, source='X', target='Y_')
         network.add_connection(recurrent_conn, source='Y', target='Y')
+        network.add_connection(conv_conn2, source='Y_', target='Z')
+        network.add_connection(conv_conn2_prime, source='Y_', target='Z_')
+        network.add_connection(recurrent_conn2, source='Z', target='Z')
 
         # Voltage recording for excitatory and inhibitory layers.
         voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
         network.add_monitor(voltage_monitor, name='output_voltage')
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
-        network.connections['X', 'Y'].update_rule = NoOp(
-            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
-        )
-        network.layers['Y'].theta_decay = 0
-        network.layers['Y'].theta_plus = 0
+
+        for connection in network.connections.values():
+            connection.update_rule = NoOp(connection, connection.nu)
+            connection.theta_decay = 0
+            connection.theta_plus = 0
 
     # Load MNIST data.
     dataset = MNIST(data_path, download=True)
@@ -135,15 +183,15 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     images *= intensity
 
     # Record spikes during the simulation.
-    spike_record = torch.zeros(update_interval, time, n_neurons)
+    spike_record = torch.zeros(update_interval, time, n_neurons2)
 
     # Neuron assignments and spike proportions.
     if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        assignments = -torch.ones_like(torch.Tensor(n_neurons2))
+        proportions = torch.zeros_like(torch.Tensor(n_neurons2, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_neurons2, n_classes))
         logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
-        logreg_model.coef_ = np.zeros([n_classes, n_neurons])
+        logreg_model.coef_ = np.zeros([n_classes, n_neurons2])
         logreg_model.intercept_ = np.zeros(n_classes)
         logreg_model.classes_ = np.arange(n_classes)
     else:
@@ -179,6 +227,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     spike_ims = None
     spike_axes = None
     weights_im = None
+    weights_im2 = None
 
     start = t()
     for i in range(n_examples):
@@ -248,16 +297,19 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+        spike_record[i % update_interval] = spikes['Z_'].get('s').view(time, -1)
 
         # Optionally plot various simulation information.
         if plot:
             _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
             w = network.connections['X', 'Y'].w
+            w2 = network.connections['Y_', 'Z'].w
             _spikes = {
                 'X': spikes['X'].get('s').view(28 ** 2, time),
-                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
-                'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
+                'Y': spikes['Y'].get('s').view(n_neurons, time),
+                'Y_': spikes['Y_'].get('s').view(n_neurons, time),
+                'Z': spikes['Z'].get('s').view(n_neurons2, time),
+                'Z_': spikes['Z_'].get('s').view(n_neurons2, time)
             }
 
             inpt_axes, inpt_ims = plot_input(
@@ -265,6 +317,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
+            weights_im2 = plot_conv2d_weights(w2, im=weights_im2, wmax=0.2)
 
             plt.pause(1e-8)
 
@@ -381,7 +434,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[8], help='one or two kernel side lengths')
+    parser.add_argument('--kernel_size2', type=int, nargs='+', default=[4], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[4], help='one or two horizontal stride lengths')
+    parser.add_argument('--stride2', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
@@ -403,7 +458,9 @@ if __name__ == '__main__':
     n_train = args.n_train
     n_test = args.n_test
     kernel_size = args.kernel_size
+    kernel_size2 = args.kernel_size2
     stride = args.stride
+    stride2 = args.stride2
     n_filters = args.n_filters
     padding = args.padding
     inhib = args.inhib
@@ -423,12 +480,25 @@ if __name__ == '__main__':
     else:
         kernel_size = tuple(kernel_size)
 
+    if len(kernel_size2) == 1:
+        kernel_size2 = (kernel_size2[0], kernel_size2[0])
+    else:
+        kernel_size2 = tuple(kernel_size2)
+
     if len(stride) == 1:
         stride = (stride[0], stride[0])
     else:
         stride = tuple(stride)
 
+    if len(stride2) == 1:
+        stride2 = (stride2[0], stride2[0])
+    else:
+        stride2 = tuple(stride2)
+
     args = vars(args)
+    args.update(
+        {'kernel_size': kernel_size, 'kernel_size2': kernel_size2, 'stride': stride, 'stride2': stride2}
+    )
 
     print('\nCommand-line argument values:')
     for key, value in args.items():
@@ -436,8 +506,6 @@ if __name__ == '__main__':
 
     print()
 
-    main(seed=seed, n_train=n_train, n_test=n_test, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-         padding=padding, inhib=inhib, time=time, lr=lr, lr_decay=lr_decay, dt=dt, intensity=intensity,
-         progress_interval=progress_interval, update_interval=update_interval, plot=plot, train=train, gpu=gpu)
+    main(**args)
 
     print()
