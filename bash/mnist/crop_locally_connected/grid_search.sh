@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-n_train=120000
+n_train=60000
 n_test=10000
 inhib=250
 time=250
@@ -13,9 +13,9 @@ for seed in 0
 do
     for kernel_size in 12 14 16
     do
-        for stride in 1 2 3 4
+        for stride in 2 4
         do
-            for n_filters in 150
+            for n_filters in 200 250
             do
                 for crop in 4
                 do
