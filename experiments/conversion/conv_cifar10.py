@@ -10,9 +10,9 @@ import torch.nn as nn
 import torch.optim as optim
 
 from bindsnet.datasets import CIFAR10
-from bindsnet.conversion import ann_to_snn
+from bindsnet.conversion import ann_to_snn, MaxPool2dConnection
 from bindsnet.network.monitors import Monitor
-from bindsnet.analysis.plotting import plot_spikes
+from bindsnet.analysis.plotting import plot_spikes, plot_voltages
 
 params_path = os.path.join('..', '..', 'params', 'cifar10_conversion')
 if not os.path.isdir(params_path):
@@ -148,6 +148,11 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
             SNN.add_monitor(
                 Monitor(SNN.layers[l], state_vars=['s', 'v'], time=time), name=l
             )
+    for c in SNN.connections:
+        if isinstance(SNN.connections[c], MaxPool2dConnection):
+            SNN.add_monitor(
+                Monitor(SNN.connections[c], state_vars=['firing_rates'], time=time), name=f'{c[0]}_{c[1]}_rates'
+            )
 
     outputs = ANN.forward(images)
     loss = criterion(outputs, labels)
@@ -159,6 +164,9 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
     spike_ims = None
     spike_axes = None
+    frs_ims = None
+    frs_axes = None
+
     correct = []
 
     print()
@@ -178,8 +186,15 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
 
         SNN.run(inpts=inpts, time=time)
 
-        spikes = {l: SNN.monitors[l].get('s') for l in SNN.monitors}
-        voltages = {l: SNN.monitors[l].get('v') for l in SNN.monitors}
+        spikes = {
+            l: SNN.monitors[l].get('s') for l in SNN.monitors if 's' in SNN.monitors[l].state_vars
+        }
+        voltages = {
+            l: SNN.monitors[l].get('v') for l in SNN.monitors if 'v' in SNN.monitors[l].state_vars
+        }
+        firing_rates = {
+            l: SNN.monitors[l].get('firing_rates').view(-1, time) for l in SNN.monitors if 'firing_rates' in SNN.monitors[l].state_vars
+        }
 
         prediction = torch.softmax(voltages['12'].sum(1), 0).argmax()
         correct.append((prediction == labels[i]).item())
@@ -191,6 +206,9 @@ def main(n_epochs=1, batch_size=100, time=50, update_interval=50, n_examples=100
             spikes = {**inpts, **spikes}
             spike_ims, spike_axes = plot_spikes(
                 {k: spikes[k].cpu() for k in spikes}, ims=spike_ims, axes=spike_axes
+            )
+            frs_ims, frs_axes = plot_voltages(
+                firing_rates, ims=frs_ims, axes=frs_axes
             )
 
             plt.pause(1e-3)
