@@ -240,7 +240,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             state = next_state
             obs = next_obs
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, model_name]])
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, occlusion]])
     columns = [
         'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'occlusion', 'avg. reward', 'rewards'
     ]

@@ -2,7 +2,7 @@
 
 for seed in 0 1 2 3 4
 do
-    for time in 25 100 500
+    for time in 100
     do
         for n_episodes in 100
         do
