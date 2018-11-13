@@ -70,8 +70,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
-            theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
+            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=.1 * lr, nu_post=lr, theta_plus=theta_plus,
+            theta_decay=theta_decay, wmin=0, wmax=1.0, norm=norm
         )
         network.layers['Y'].thresh = 1
         network.layers['Y'].reset = 0
@@ -218,7 +218,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_locally_connected_weights(
                 network.connections['X', 'Y'].w, n_filters, kernel_size, conv_size,
-                locations, side_length, im=weights_im, wmax=3*norm
+                locations, side_length, im=weights_im, wmin=0, wmax=1
             )
 
             plt.pause(1e-8)

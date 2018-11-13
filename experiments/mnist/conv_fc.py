@@ -16,7 +16,8 @@ from bindsnet.network.monitors import Monitor
 from bindsnet.evaluation import assign_labels, logreg_fit
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights, plot_weights
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights, plot_weights, plot_assignments
+from bindsnet.utils import get_square_assignments
 
 from experiments import ROOT_DIR
 from experiments.utils import print_results, update_curves
@@ -78,6 +79,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), stride=(4,), n_f
     total_kernel_size = int(np.prod(kernel_size))
     total_conv_size = int(np.prod(conv_size))
     n_neurons = n_filters * total_conv_size
+    n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 
     # Build network.
     if train:
@@ -206,6 +208,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), stride=(4,), n_f
     spike_axes = None
     weights_im = None
     weights_im2 = None
+    assigns_im = None
 
     start = t()
     for i in range(n_examples):
@@ -289,6 +292,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), stride=(4,), n_f
                 'Z': spikes['Z'].get('s').view(n_full, time),
                 'Z_': spikes['Z_'].get('s').view(n_full, time)
             }
+            square_assignments = get_square_assignments(assignments, n_sqrt)
 
             inpt_axes, inpt_ims = plot_input(
                 image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
@@ -296,6 +300,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), stride=(4,), n_f
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
             weights_im2 = plot_weights(w2, im=weights_im2, wmax=1)
+            assigns_im = plot_assignments(square_assignments, im=assigns_im)
 
             plt.pause(1e-8)
 

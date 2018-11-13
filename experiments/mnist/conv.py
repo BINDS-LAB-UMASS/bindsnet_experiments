@@ -387,7 +387,7 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
