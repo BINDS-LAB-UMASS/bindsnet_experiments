@@ -287,14 +287,14 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         with open(os.path.join(path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,lr,lr_decay,timestep,theta_plus,theta_decay,'
-                    'norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
+                    'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,lr,lr_decay,timestep,theta_plus,'
+                    'theta_decay,norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,lr,lr_decay,timestep,theta_plus,'
-                    'theta_decay,norm,progress_interval,update_interval,mean_all_activity,'
+                    'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,lr,lr_decay,timestep,'
+                    'theta_plus,theta_decay,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
