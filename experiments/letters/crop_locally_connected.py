@@ -1,4 +1,6 @@
 import os
+from typing import Optional, Union, Sequence
+
 import torch
 import argparse
 import numpy as np
@@ -9,19 +11,21 @@ from sklearn.metrics import confusion_matrix
 
 from torchvision.datasets import EMNIST
 
-from bindsnet.learning import NoOp
+from bindsnet.learning import NoOp, LearningRule
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.network import load_network, AbstractConnection
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_input
+from bindsnet.network.topology import Connection, LocallyConnectedConnection, Conv2dConnection
+from bindsnet.utils import im2col_indices
 
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
 model = 'crop_locally_connected'
-data = 'emnist'
+data = 'letters'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'EMNIST')
 params_path = os.path.join(ROOT_DIR, 'params', data, model)
@@ -32,6 +36,81 @@ confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
 for path in [params_path, curves_path, results_path, confusion_path]:
     if not os.path.isdir(path):
         os.makedirs(path)
+
+
+class WeightDependentPost(LearningRule):
+    # language=rst
+    """
+    STDP rule involving only post-synaptic spiking activity. The post-synaptic update is positive, and dependent on the
+    magnitude of the synaptic. It is assumed that the synaptic weights are positive.
+    """
+
+    def __init__(self, connection: AbstractConnection, nu: Optional[Union[float, Sequence[float]]] = None,
+                 weight_decay: float = 0.0) -> None:
+        # language=rst
+        """
+        Constructor for ``WeightDependentPost`` learning rule.
+
+        :param connection: An ``AbstractConnection`` object whose weights the ``WeightDependentPost`` learning rule will
+                           modify.
+        :param nu: Single or pair of learning rates for pre- and post-synaptic events, respectively.
+        :param weight_decay: Constant multiple to decay weights by on each iteration.
+        """
+        super().__init__(
+            connection=connection, nu=nu, weight_decay=weight_decay
+        )
+
+        assert self.source.traces and self.target.traces, 'Both pre- and post-synaptic nodes must record spike traces.'
+
+        if isinstance(connection, (Connection, LocallyConnectedConnection)):
+            self.update = self._connection_update
+        elif isinstance(connection, Conv2dConnection):
+            self.update = self._conv2d_connection_update
+        else:
+            raise NotImplementedError(
+                'This learning rule is not supported for this Connection type.'
+            )
+
+    def _connection_update(self, **kwargs) -> None:
+        # language=rst
+        """
+        Post-pre learning rule for ``Connection`` subclass of ``AbstractConnection`` class.
+        """
+        super().update()
+
+        source_x = self.source.x.view(-1)
+        target_s = self.target.s.view(-1).float()
+
+        shape = self.connection.w.shape
+        self.connection.w = self.connection.w.view(self.source.n, self.target.n)
+
+        # Post-synaptic update.
+        update = self.nu[1] * torch.ger(source_x, target_s) * (self.connection.wmax - self.connection.w)
+        self.connection.w += update
+
+        self.connection.w = self.connection.w.view(*shape)
+
+    def _conv2d_connection_update(self, **kwargs) -> None:
+        # language=rst
+        """
+        Post-pre learning rule for ``Conv2dConnection`` subclass of ``AbstractConnection`` class.
+        """
+        super().update()
+
+        # Get convolutional layer parameters.
+        out_channels, in_channels, kernel_height, kernel_width = self.connection.w.size()
+        padding, stride = self.connection.padding, self.connection.stride
+
+        # Reshaping spike traces and spike occurrences.
+        x_source = im2col_indices(
+            self.source.x, kernel_height, kernel_width, padding=padding, stride=stride
+        )
+        s_target = self.target.s.permute(1, 2, 3, 0).reshape(out_channels, -1).float()
+
+        # Post-synaptic update.
+        post = s_target @ x_source.t()
+        self.connection.w += self.nu[1] * post.view(self.connection.w.size()) \
+                             * (self.connection.wmax - self.connection.wmin)
 
 
 def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, crop=0, lr=0.01,
@@ -74,6 +153,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
             theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
         )
+        network.connections['X', 'Y'].update_rule = WeightDependentPost(
+            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        )
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -92,14 +174,14 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     network.add_monitor(voltage_monitor, name='output_voltage')
 
     # Load EMNIST data.
-    dataset = EMNIST(root=data_path, split='byclass', train=train, download=True)
+    dataset = EMNIST(root=data_path, split='letters', train=train, download=True)
 
-    if train:
-        images = dataset.train_data
-        labels = dataset.train_labels
-    else:
-        images = dataset.test_data
-        labels = dataset.test_labels
+    images = dataset.data
+    labels = dataset.targets
+
+    if gpu:
+        images = images.cuda()
+        labels = labels.cuda()
 
     images *= intensity
 
@@ -331,11 +413,11 @@ if __name__ == '__main__':
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
-    parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
+    parser.add_argument('--stride', type=int, nargs='+', default=[4], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--crop', type=int, default=0, help='amount to crop images at borders')
     parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
