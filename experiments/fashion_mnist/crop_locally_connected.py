@@ -35,9 +35,9 @@ for path in [params_path, curves_path, results_path, confusion_path]:
 
 def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), time=50, n_filters=25, crop=0,
          lr=1e-2, lr_decay=0.99, dt=1, theta_plus=0.05, theta_decay=1e-7, norm=0.2, progress_interval=10,
-         update_interval=250, train=True, plot=False, gpu=False):
+         update_interval=250, train=True, relabel=False, plot=False, gpu=False):
 
-    assert n_train % update_interval == 0 and n_test % update_interval == 0, \
+    assert n_train % update_interval == 0 and n_test % update_interval == 0 or relabel, \
         'No. examples must be divisible by update_interval'
 
     params = [
@@ -106,6 +106,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         images = images[:, crop:-crop, crop:-crop]
 
     # Record spikes during the simulation.
+    if not train:
+        update_interval = n_examples
+
     spike_record = torch.zeros(update_interval, time, n_neurons)
 
     # Neuron assignments and spike proportions.
@@ -184,10 +187,10 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
+                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
 
                 # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
+                ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
             print()
 
@@ -234,6 +237,13 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     else:
         current_labels = labels[i % len(images) - update_interval:i % len(images)]
 
+    if not train and relabel:
+        # Assign labels to excitatory layer neurons.
+        assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
+
+        # Compute ngram scores.
+        ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
+
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
         curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
@@ -253,8 +263,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
 
-            best_accuracy = max([x[-1] for x in curves.values()])
-
     if train:
         print('\nTraining complete.\n')
     else:
@@ -262,7 +270,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     print('Average accuracies:\n')
     for scheme in curves.keys():
-        print('\t%s: %.2f' % (scheme, np.mean(curves[scheme])))
+        print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
     # Save accuracy curves to disk.
     to_write = ['train'] + params if train else ['test'] + params
@@ -343,9 +351,10 @@ if __name__ == '__main__':
     parser.add_argument('--update_interval', type=int, default=250)
     parser.add_argument('--train', dest='train', action='store_true')
     parser.add_argument('--test', dest='train', action='store_false')
+    parser.add_argument('--relabel', dest='relabel', action='store_true')
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.add_argument('--gpu', dest='gpu', action='store_true')
-    parser.set_defaults(plot=False, gpu=False, train=True)
+    parser.set_defaults(plot=False, gpu=False, train=True, relabel=False)
 
     args = parser.parse_args()
 
