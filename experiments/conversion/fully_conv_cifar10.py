@@ -185,7 +185,7 @@ def main(seed=0, n_epochs=1, batch_size=100, time=50, update_interval=50,
 
         spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
         voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-        prediction = torch.softmax(voltages['9'].sum(1), 0).argmax()
+        prediction = torch.softmax(voltages['10'].sum(1), 0).argmax()
         correct.append((prediction == labels[i]).item())
 
         SNN.reset_()
@@ -202,7 +202,7 @@ def main(seed=0, n_epochs=1, batch_size=100, time=50, update_interval=50,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--n_epochs', type=int, default=3)
+    parser.add_argument('--n_epochs', type=int, default=25)
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--update_interval', type=int, default=50)

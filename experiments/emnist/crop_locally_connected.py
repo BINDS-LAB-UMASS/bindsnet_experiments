@@ -7,50 +7,51 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
+from torchvision.datasets import EMNIST
+
 from bindsnet.learning import NoOp
 from bindsnet.encoding import poisson
 from bindsnet.network import load_network
-from bindsnet.datasets import FashionMNIST
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import assign_labels, update_ngram_scores
-from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes
+from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_input
 
+from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
 
 model = 'crop_locally_connected'
-data = 'fashion_mnist'
+data = 'emnist'
 
-top_level = os.path.join('..', '..')
-data_path = os.path.join(top_level, 'data', 'FashionMNIST')
-params_path = os.path.join(top_level, 'params', data, model)
-curves_path = os.path.join(top_level, 'curves', data, model)
-results_path = os.path.join(top_level, 'results', data, model)
-confusion_path = os.path.join(top_level, 'confusion', data, model)
+data_path = os.path.join(ROOT_DIR, 'data', 'EMNIST')
+params_path = os.path.join(ROOT_DIR, 'params', data, model)
+curves_path = os.path.join(ROOT_DIR, 'curves', data, model)
+results_path = os.path.join(ROOT_DIR, 'results', data, model)
+confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
 
 for path in [params_path, curves_path, results_path, confusion_path]:
     if not os.path.isdir(path):
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), time=50, n_filters=25, crop=0,
-         lr=1e-2, lr_decay=0.99, dt=1, theta_plus=0.05, theta_decay=1e-7, norm=0.2, progress_interval=10,
-         update_interval=250, train=True, relabel=False, plot=False, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, crop=0, lr=0.01,
+         lr_decay=1, time=100, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
+         update_interval=250, plot=False, train=True, gpu=False):
 
-    assert n_train % update_interval == 0 and n_test % update_interval == 0 or relabel, \
+    assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
     params = [
-        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib,
-        time, dt, theta_plus, theta_decay, norm, progress_interval, update_interval
+        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, inhib, time, dt,
+        theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib,
-            time, dt, theta_plus, theta_decay, norm, progress_interval, update_interval
+            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
+            theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
         ]
 
     np.random.seed(seed)
@@ -64,19 +65,15 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     side_length = 28 - crop * 2
     n_inpt = side_length ** 2
     n_examples = n_train if train else n_test
-    n_classes = 10
+    n_classes = 62
 
     # Build network.
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=.1 * lr, nu_post=lr, theta_plus=theta_plus,
-            theta_decay=theta_decay, wmin=0, wmax=1.0, norm=norm
+            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
+            theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
         )
-        network.layers['Y'].thresh = 1
-        network.layers['Y'].reset = 0
-        network.layers['Y'].rest = 0
-
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -94,28 +91,29 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
     network.add_monitor(voltage_monitor, name='output_voltage')
 
-    # Load Fashion-MNIST data.
-    dataset = FashionMNIST(path=data_path, download=True)
+    # Load EMNIST data.
+    dataset = EMNIST(root=data_path, split='byclass', train=train, download=True)
 
     if train:
-        images, labels = dataset.get_train()
+        images = dataset.train_data
+        labels = dataset.train_labels
     else:
-        images, labels = dataset.get_test()
+        images = dataset.test_data
+        labels = dataset.test_labels
+
+    images *= intensity
 
     if crop != 0:
         images = images[:, crop:-crop, crop:-crop]
 
     # Record spikes during the simulation.
-    if not train:
-        update_interval = n_examples
-
     spike_record = torch.zeros(update_interval, time, n_neurons)
 
     # Neuron assignments and spike proportions.
     if train:
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
+        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         ngram_scores = {}
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
@@ -144,17 +142,19 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     spike_ims = None
     spike_axes = None
     weights_im = None
+    inpt_ims = None
+    inpt_axes = None
 
     start = t()
     for i in range(n_examples):
-        if i % progress_interval == 0 and train:
-            network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
-
         if i % progress_interval == 0:
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -215,13 +215,17 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
         # Optionally plot various simulation information.
         if plot:
-            _spikes = {'X': spikes['X'].get('s').view(side_length ** 2, time),
-                       'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)}
+            _input = image.view(side_length, side_length)
+            reconstruction = inpts['X'].view(time, side_length ** 2).sum(0).view(side_length, side_length)
+            _spikes = {
+                'X': spikes['X'].get('s').view(side_length ** 2, time),
+                'Y': spikes['Y'].get('s').view(n_filters * conv_prod, time)
+            }
 
+            inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], ims=inpt_ims, axes=inpt_axes)
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_locally_connected_weights(
-                network.connections['X', 'Y'].w, n_filters, kernel_size, conv_size,
-                locations, side_length, im=weights_im, wmin=0, wmax=1
+                network.connections[('X', 'Y')].w, n_filters, kernel_size, conv_size, locations, side_length, im=weights_im
             )
 
             plt.pause(1e-8)
@@ -236,13 +240,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         current_labels = labels[-update_interval:]
     else:
         current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-    if not train and relabel:
-        # Assign labels to excitatory layer neurons.
-        assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
-
-        # Compute ngram scores.
-        ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
@@ -278,10 +275,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
 
     # Save results to disk.
-    path = os.path.join('..', '..', 'results', data, model)
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
     results = [
         np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
         np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
@@ -292,17 +285,17 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     name = 'train.csv' if train else 'test.csv'
 
     if not os.path.isfile(os.path.join(results_path, name)):
-        with open(os.path.join(path, name), 'w') as f:
+        with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,inhib,time,lr,lr_decay,timestep,theta_plus,'
-                    'theta_decay,norm,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,inhib,time,timestep,theta_plus,'
+                    'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
+                    'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,n_train,n_test,inhib,time,lr,lr_decay,timestep,'
-                    'theta_plus,theta_decay,norm,progress_interval,update_interval,mean_all_activity,'
+                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
+                    'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
 
@@ -331,31 +324,31 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 if __name__ == '__main__':
     print()
 
+    # Parameters.
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--n_train', type=int, default=60000)
-    parser.add_argument('--n_test', type=int, default=10000)
-    parser.add_argument('--inhib', type=float, default=250)
-    parser.add_argument('--kernel_size', nargs='+', type=int, default=[16])
-    parser.add_argument('--stride', nargs='+', type=int, default=[4])
-    parser.add_argument('--n_filters', type=int, default=16)
-    parser.add_argument('--crop', type=int, default=0)
-    parser.add_argument('--time', type=int, default=250)
-    parser.add_argument('--lr', type=float, default=1e-2)
-    parser.add_argument('--lr_decay', type=float, default=0.99)
-    parser.add_argument('--dt', type=float, default=1.0)
-    parser.add_argument('--theta_plus', type=float, default=0.05)
-    parser.add_argument('--theta_decay', type=float, default=1e-7)
-    parser.add_argument('--norm', type=float, default=0.1)
-    parser.add_argument('--progress_interval', type=int, default=10)
-    parser.add_argument('--update_interval', type=int, default=250)
-    parser.add_argument('--train', dest='train', action='store_true')
-    parser.add_argument('--test', dest='train', action='store_false')
-    parser.add_argument('--relabel', dest='relabel', action='store_true')
-    parser.add_argument('--plot', dest='plot', action='store_true')
-    parser.add_argument('--gpu', dest='gpu', action='store_true')
-    parser.set_defaults(plot=False, gpu=False, train=True, relabel=False)
-
+    parser.add_argument('--seed', type=int, default=0, help='random seed')
+    parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
+    parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
+    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
+    parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
+    parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
+    parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
+    parser.add_argument('--crop', type=int, default=0, help='amount to crop images at borders')
+    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--time', default=25, type=int, help='simulation time')
+    parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
+    parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
+    parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
+    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--norm', type=float, default=0.2, help='plastic synaptic weight normalization constant')
+    parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
+    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
+    parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
+    parser.add_argument('--train', dest='train', action='store_true', help='train phase')
+    parser.add_argument('--test', dest='train', action='store_false', help='test phase')
+    parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
+    parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
 
     kernel_size = args.kernel_size

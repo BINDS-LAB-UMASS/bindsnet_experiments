@@ -1,4 +1,6 @@
 import os
+from typing import Optional, Union, Sequence
+
 import torch
 import argparse
 import numpy as np
@@ -9,14 +11,15 @@ from sklearn.metrics import confusion_matrix
 from sklearn.linear_model import LogisticRegression
 
 from bindsnet.datasets import MNIST
-from bindsnet.network import Network, load_network
-from bindsnet.learning import PostPre, NoOp
 from bindsnet.encoding import bernoulli
+from bindsnet.utils import im2col_indices
 from bindsnet.network.monitors import Monitor
+from bindsnet.network import Network, load_network
+from bindsnet.learning import PostPre, NoOp, LearningRule
 from bindsnet.evaluation import assign_labels, logreg_fit
-from bindsnet.network.topology import Connection, Conv2dConnection
-from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
+from bindsnet.network.nodes import Input, AdaptiveLIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
+from bindsnet.network.topology import Connection, Conv2dConnection, AbstractConnection, LocallyConnectedConnection
 
 from experiments import ROOT_DIR
 from experiments.utils import print_results, update_curves
@@ -33,6 +36,78 @@ confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
 for path in [params_path, curves_path, results_path, confusion_path]:
     if not os.path.isdir(path):
         os.makedirs(path)
+
+
+class WeightDependentPostPositive(LearningRule):
+
+    def __init__(self, connection: AbstractConnection, nu: Optional[Union[float, Sequence[float]]] = None,
+                 weight_decay: float = 0.0) -> None:
+        # language=rst
+        """
+        Constructor for ``PostPre`` learning rule.
+
+        :param connection: An ``AbstractConnection`` object whose weights the ``PostPre`` learning rule will modify.
+        :param nu: Single or pair of learning rates for pre- and post-synaptic events, respectively.
+        :param weight_decay: Constant multiple to decay weights by on each iteration.
+        """
+        super().__init__(
+            connection=connection, nu=nu, weight_decay=weight_decay
+        )
+
+        assert self.source.traces and self.target.traces, 'Both pre- and post-synaptic nodes must record spike traces.'
+
+        if isinstance(connection, (Connection, LocallyConnectedConnection)):
+            self.update = self._connection_update
+        elif isinstance(connection, Conv2dConnection):
+            self.update = self._conv2d_connection_update
+        else:
+            raise NotImplementedError(
+                'This learning rule is not supported for this Connection type.'
+            )
+
+        self.wmin = self.connection.wmin
+        self.wmax = self.connection.wmax
+
+    def _connection_update(self, **kwargs) -> None:
+        # language=rst
+        """
+        Post-pre learning rule for ``Connection`` subclass of ``AbstractConnection`` class.
+        """
+        super().update()
+
+        source_x = self.source.x.view(-1)
+        target_s = self.target.s.view(-1).float()
+
+        shape = self.connection.w.shape
+        self.connection.w = self.connection.w.view(self.source.n, self.target.n)
+
+        # Post-synaptic update.
+        self.connection.w += self.nu[1] * torch.ger(source_x - 0.2, target_s) * \
+                 (self.wmax - self.connection.w) * (self.connection.w - self.wmin)
+
+        self.connection.w = self.connection.w.view(*shape)
+
+    def _conv2d_connection_update(self, **kwargs) -> None:
+        # language=rst
+        """
+        Post-pre learning rule for ``Conv2dConnection`` subclass of ``AbstractConnection`` class.
+        """
+        super().update()
+
+        # Get convolutional layer parameters.
+        out_channels, _, kernel_height, kernel_width = self.connection.w.size()
+        padding, stride = self.connection.padding, self.connection.stride
+
+        # Reshaping spike traces and spike occurrences.
+        x_source = im2col_indices(
+            self.source.x, kernel_height, kernel_width, padding=padding, stride=stride
+        )
+        s_target = self.target.s.permute(1, 2, 3, 0).reshape(out_channels, -1).float()
+
+        # Post-synaptic update.
+        post = s_target @ (x_source.t() - 0.2)
+        self.connection.w += self.nu[1] * post.view(self.connection.w.size()) * \
+                             (self.wmax - self.connection.w) * (self.connection.w - self.wmin)
 
 
 def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
@@ -81,37 +156,20 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     if train:
         network = Network()
         input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
-        conv_layer = DiehlAndCookNodes(
-            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
-            traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+        conv_layer = AdaptiveLIFNodes(
+            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), reset=0,
+            rest=0, thresh=1, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
         )
-        conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
+        w = torch.randn(n_filters, 1, *kernel_size)
         conv_conn = Conv2dConnection(
-            input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
-            norm=0.5 * int(np.sqrt(total_kernel_size)), nu=[0, lr], wmax=2.0
+            input_layer, conv_layer, w=torch.clamp(w, -1, 1),
+            kernel_size=kernel_size, stride=stride, update_rule=WeightDependentPostPositive,
+            nu=[0, lr], wmin=-1.0, wmax=1.0
         )
-        conv_conn2 = Conv2dConnection(
-            input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
-            stride=stride, update_rule=None, nu=[0, 0], wmax=2.0
-        )
-
-        w = -inhib * torch.ones(
-            n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1]
-        )
-        for f in range(n_filters):
-            for i in range(conv_size[0]):
-                for j in range(conv_size[1]):
-                    w[f, i, j, f, i, j] = 0
-
-        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
-        recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
         network.add_layer(input_layer, name='X')
         network.add_layer(conv_layer, name='Y')
-        network.add_layer(conv_layer2, name='Y_')
         network.add_connection(conv_conn, source='X', target='Y')
-        network.add_connection(conv_conn2, source='X', target='Y_')
-        network.add_connection(recurrent_conn, source='Y', target='Y')
 
         # Voltage recording for excitatory and inhibitory layers.
         voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
@@ -241,14 +299,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         network.run(inpts=inpts, time=time)
 
         retries = 0
-        while spikes['Y_'].get('s').sum() < 5 and retries < 3:
+        while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
             sample = bernoulli(datum=image, time=time, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
             inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+        spike_record[i % update_interval] = spikes['Y'].get('s').view(time, -1)
 
         # Optionally plot various simulation information.
         if plot:
@@ -256,15 +314,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             w = network.connections['X', 'Y'].w
             _spikes = {
                 'X': spikes['X'].get('s').view(28 ** 2, time),
-                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
-                'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
+                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time)
             }
 
             inpt_axes, inpt_ims = plot_input(
                 image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
+            weights_im = plot_conv2d_weights(w, im=weights_im, wmin=-1, wmax=1)
 
             plt.pause(1e-8)
 
@@ -387,7 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')

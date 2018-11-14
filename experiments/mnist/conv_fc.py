@@ -16,7 +16,8 @@ from bindsnet.network.monitors import Monitor
 from bindsnet.evaluation import assign_labels, logreg_fit
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights, plot_weights, plot_assignments
+from bindsnet.utils import get_square_assignments
 
 from experiments import ROOT_DIR
 from experiments.utils import print_results, update_curves
@@ -35,24 +36,24 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
-         time=25, lr=1e-3, lr_decay=0.99, dt=1, intensity=1, progress_interval=10, update_interval=250, plot=False,
-         train=True, gpu=False):
+def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), stride=(4,), n_filters=25, n_full=100, padding=0,
+         inhib=100, time=100, lr=1e-3, lr_decay=0.99, dt=1, intensity=1, progress_interval=10,
+         update_interval=250, plot=False, train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
     params = [
-        seed, n_train, kernel_size, stride, n_filters, padding,
-        inhib, time, lr, lr_decay, dt, intensity, update_interval
+        seed, n_train, kernel_size, stride, n_filters, n_full,
+        padding, inhib, time, lr, lr_decay, dt, intensity, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
 
     if not train:
         test_params = [
-            seed, n_train, n_test, kernel_size, stride, n_filters, padding,
-            inhib, time, lr, lr_decay, dt, intensity, update_interval
+            seed, n_train, n_test, kernel_size, stride, n_filters, n_full,
+            padding, inhib, time, lr, lr_decay, dt, intensity, update_interval
         ]
 
     np.random.seed(seed)
@@ -69,13 +70,16 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     if kernel_size == input_shape:
         conv_size = [1, 1]
     else:
-        conv_size = (int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
-                     int((input_shape[1] - kernel_size[1]) / stride[1]) + 1)
+        conv_size = (
+            int((input_shape[0] - kernel_size[0]) / stride[0]) + 1,
+            int((input_shape[1] - kernel_size[1]) / stride[1]) + 1
+        )
 
     n_classes = 10
-    n_neurons = n_filters * np.prod(conv_size)
     total_kernel_size = int(np.prod(kernel_size))
     total_conv_size = int(np.prod(conv_size))
+    n_neurons = n_filters * total_conv_size
+    n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 
     # Build network.
     if train:
@@ -83,16 +87,18 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
         conv_layer = DiehlAndCookNodes(
             n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
-            traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+            traces=True, theta_plus=0.05, refrac=0
         )
-        conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
+        conv_layer_prime = LIFNodes(
+            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0, traces=True
+        )
         conv_conn = Conv2dConnection(
             input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
             norm=0.5 * int(np.sqrt(total_kernel_size)), nu=[0, lr], wmax=2.0
         )
-        conv_conn2 = Conv2dConnection(
-            input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
-            stride=stride, update_rule=None, nu=[0, 0], wmax=2.0
+        conv_conn_prime = Conv2dConnection(
+            input_layer, conv_layer_prime, w=conv_conn.w,
+            kernel_size=kernel_size, stride=stride, nu=[0, 0], wmax=2.0
         )
 
         w = -inhib * torch.ones(
@@ -106,23 +112,45 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
         recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
+        full_layer = DiehlAndCookNodes(
+            n=n_full, thresh=-52.0, traces=True, theta_plus=0.05, refrac=0
+        )
+        full_layer_prime = LIFNodes(
+            n=n_full, refrac=0
+        )
+        full_conn = Connection(
+            conv_layer_prime, full_layer, update_rule=PostPre, norm=0.2 * n_neurons, nu=[0, 10 * lr], wmax=1
+        )
+        full_conn_prime = Connection(
+            conv_layer_prime, full_layer_prime, 0, wmax=1
+        )
+
+        w = -inhib * (torch.ones(n_full, n_full) - torch.diag(torch.ones(n_full)))
+        recurrent_conn2 = Connection(full_layer, full_layer, w=w)
+
         network.add_layer(input_layer, name='X')
         network.add_layer(conv_layer, name='Y')
-        network.add_layer(conv_layer2, name='Y_')
+        network.add_layer(conv_layer_prime, name='Y_')
+        network.add_layer(full_layer, name='Z')
+        network.add_layer(full_layer_prime, name='Z_')
+
         network.add_connection(conv_conn, source='X', target='Y')
-        network.add_connection(conv_conn2, source='X', target='Y_')
+        network.add_connection(conv_conn_prime, source='X', target='Y_')
         network.add_connection(recurrent_conn, source='Y', target='Y')
+        network.add_connection(full_conn, source='Y_', target='Z')
+        network.add_connection(full_conn_prime, source='Y_', target='Z_')
+        network.add_connection(recurrent_conn2, source='Z', target='Z')
 
         # Voltage recording for excitatory and inhibitory layers.
         voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
         network.add_monitor(voltage_monitor, name='output_voltage')
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
-        network.connections['X', 'Y'].update_rule = NoOp(
-            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
-        )
-        network.layers['Y'].theta_decay = 0
-        network.layers['Y'].theta_plus = 0
+
+        for connection in network.connections.values():
+            connection.update_rule = NoOp(connection, connection.nu)
+            connection.theta_decay = 0
+            connection.theta_plus = 0
 
     # Load MNIST data.
     dataset = MNIST(data_path, download=True)
@@ -135,15 +163,15 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     images *= intensity
 
     # Record spikes during the simulation.
-    spike_record = torch.zeros(update_interval, time, n_neurons)
+    spike_record = torch.zeros(update_interval, time, n_full)
 
     # Neuron assignments and spike proportions.
     if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        assignments = -torch.ones_like(torch.Tensor(n_full))
+        proportions = torch.zeros_like(torch.Tensor(n_full, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_full, n_classes))
         logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
-        logreg_model.coef_ = np.zeros([n_classes, n_neurons])
+        logreg_model.coef_ = np.zeros([n_classes, n_full])
         logreg_model.intercept_ = np.zeros(n_classes)
         logreg_model.classes_ = np.arange(n_classes)
     else:
@@ -179,6 +207,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     spike_ims = None
     spike_axes = None
     weights_im = None
+    weights_im2 = None
+    assigns_im = None
 
     start = t()
     for i in range(n_examples):
@@ -241,30 +271,36 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         network.run(inpts=inpts, time=time)
 
         retries = 0
-        while spikes['Y_'].get('s').sum() < 5 and retries < 3:
+        while spikes['Z'].get('s').sum() < 5 and retries < 3:
             retries += 1
             sample = bernoulli(datum=image, time=time, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
             inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+        spike_record[i % update_interval] = spikes['Z'].get('s').view(time, -1)
 
         # Optionally plot various simulation information.
         if plot:
             _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
             w = network.connections['X', 'Y'].w
+            w2 = network.connections['Y_', 'Z'].w
             _spikes = {
                 'X': spikes['X'].get('s').view(28 ** 2, time),
-                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
-                'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
+                'Y': spikes['Y'].get('s').view(n_neurons, time),
+                'Y_': spikes['Y_'].get('s').view(n_neurons, time),
+                'Z': spikes['Z'].get('s').view(n_full, time),
+                'Z_': spikes['Z_'].get('s').view(n_full, time)
             }
+            square_assignments = get_square_assignments(assignments, n_sqrt)
 
             inpt_axes, inpt_ims = plot_input(
                 image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
+            weights_im2 = plot_weights(w2, im=weights_im2, wmax=1)
+            assigns_im = plot_assignments(square_assignments, im=assigns_im)
 
             plt.pause(1e-8)
 
@@ -383,11 +419,12 @@ if __name__ == '__main__':
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[8], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[4], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
+    parser.add_argument('--n_full', type=int, default=100, help='no. of fully-connected neurons')
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
@@ -399,24 +436,8 @@ if __name__ == '__main__':
     parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
 
-    seed = args.seed
-    n_train = args.n_train
-    n_test = args.n_test
     kernel_size = args.kernel_size
     stride = args.stride
-    n_filters = args.n_filters
-    padding = args.padding
-    inhib = args.inhib
-    time = args.time
-    lr = args.lr
-    lr_decay = args.lr_decay
-    dt = args.dt
-    intensity = args.intensity
-    progress_interval = args.progress_interval
-    update_interval = args.update_interval
-    train = args.train
-    plot = args.plot
-    gpu = args.gpu
 
     if len(kernel_size) == 1:
         kernel_size = (kernel_size[0], kernel_size[0])
@@ -429,6 +450,9 @@ if __name__ == '__main__':
         stride = tuple(stride)
 
     args = vars(args)
+    args.update(
+        {'kernel_size': kernel_size, 'stride': stride}
+    )
 
     print('\nCommand-line argument values:')
     for key, value in args.items():
@@ -436,8 +460,6 @@ if __name__ == '__main__':
 
     print()
 
-    main(seed=seed, n_train=n_train, n_test=n_test, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-         padding=padding, inhib=inhib, time=time, lr=lr, lr_decay=lr_decay, dt=dt, intensity=intensity,
-         progress_interval=progress_interval, update_interval=update_interval, plot=plot, train=train, gpu=gpu)
+    main(**args)
 
     print()
