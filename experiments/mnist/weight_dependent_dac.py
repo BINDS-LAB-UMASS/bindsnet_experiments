@@ -102,8 +102,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     # Neuron assignments and spike proportions.
     if train:
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
+        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         ngram_scores = {}
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
@@ -178,10 +178,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
+                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
 
                 # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
+                ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
             print()
 
