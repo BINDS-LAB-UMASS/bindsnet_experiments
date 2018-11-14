@@ -155,7 +155,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     max_iters = 25
     delta = 0.1
-    epsilon = 0.5
+    epsilon = 0.1
 
     for i in range(n_examples):
         # Get next input sample.
@@ -217,7 +217,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
             D = 1 / np.sqrt(epsilon ** 2 + 1)
             direction = perturbation - unnormed_source_direction
-            spherical_candidate = original + D * direction
+            spherical_candidate = current + D * direction
 
             spherical_candidate = torch.clamp(spherical_candidate, 0, 255)
 

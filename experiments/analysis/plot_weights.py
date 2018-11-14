@@ -69,7 +69,9 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
             mask = torch.bernoulli(p_delete * torch.ones(w.size(1))).byte()
             w[:, mask] = 0
 
-            plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, side_length)
+            plot_locally_connected_weights(
+                w, n_filters, kernel_size, conv_size, locations, side_length, wmin=w.min(), wmax=w.max()
+            )
 
         elif model in ['backprop']:
             w = network.connections['X', 'Y'].w

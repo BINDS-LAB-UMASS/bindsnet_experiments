@@ -197,18 +197,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
                 action = np.random.choice([0, 1, 2, 3])
                 noop_counter = 0
 
-            if new_life:
-                action = 1
-
             next_obs, reward, done, info = environment.step(action)
             next_obs = next_obs.to(device)
-
-            if prev_life - info["ale.lives"] != 0:
-                new_life = True
-            else:
-                new_life = False
-
-            prev_life = info["ale.lives"]
 
             next_state = torch.clamp(next_obs - obs, min=0)
             next_state = torch.cat(
