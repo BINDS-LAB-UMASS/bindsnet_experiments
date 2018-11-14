@@ -11,7 +11,7 @@ from experiments import ROOT_DIR
 from experiments.analysis import download_params
 
 
-def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
+def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy=0, p_delete=0):
     assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
     f = os.path.join(ROOT_DIR, 'params', data, model, f'{param_string}.pt')
@@ -62,6 +62,13 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None):
             locations = locations.view(kernel_size ** 2, conv_size ** 2)
 
             w = network.connections[('X', 'Y')].w
+
+            mask = torch.bernoulli(p_destroy * torch.ones(w.size())).byte()
+            w[mask] = 0
+
+            mask = torch.bernoulli(p_delete * torch.ones(w.size(1))).byte()
+            w[:, mask] = 0
+
             plot_locally_connected_weights(w, n_filters, kernel_size, conv_size, locations, side_length)
 
         elif model in ['backprop']:
@@ -216,10 +223,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
     parser.add_argument('--param_string', type=str, default=None)
-    args = parser.parse_args()
+    parser.add_argument('--p_destroy', type=float, default=0)
+    parser.add_argument('--p_delete', type=float, default=0)
+    args = vars(parser.parse_args())
 
-    model = args.model
-    data = args.data
-    param_string = args.param_string
-
-    main(model, data, param_string)
+    main(**args)

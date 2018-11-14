@@ -235,16 +235,13 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(8,), kernel_size2=(4,
 
     start = t()
     for i in range(n_examples):
-        if train:
-            network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
-            network.connections['Y_', 'Z'].update_rule.nu[1] *= lr_decay
-
         if i % progress_interval == 0:
             print('Progress: %d / %d (%.4f seconds)' % (i, n_examples, t() - start))
             start = t()
 
         if i % update_interval == 0 and i > 0:
-
+            network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+            network.connections['Y_', 'Z'].update_rule.nu[1] *= lr_decay
 
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
