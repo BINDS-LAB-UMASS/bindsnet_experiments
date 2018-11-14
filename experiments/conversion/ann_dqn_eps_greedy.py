@@ -17,8 +17,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'occlusion_test_dqn_eps_greedy')
-params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'occlusion_test_dqn_eps_greedy')
+results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'ann_dqn_eps_greedy')
+params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'ann_dqn_eps_greedy')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -47,7 +47,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, epsilon=0.05, occlusion=0, plot=False):
+def main(seed=0, n_episodes=25, epsilon=0.05):
 
     np.random.seed(seed)
 
@@ -124,12 +124,12 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, epsilon=0.05, occlu
             state = next_state
             obs = next_obs
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, occlusion]])
+    model_name = '_'.join([str(x) for x in [seed, n_episodes, epsilon]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'occlusion', 'avg. reward', 'rewards'
+        'seed', 'n_episodes', 'epsilon', 'avg. reward', 'std. reward'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, occlusion, np.mean(episode_rewards), episode_rewards
+        seed, n_episodes, epsilon, np.mean(episode_rewards), np.std(episode_rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -145,17 +145,14 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, epsilon=0.05, occlu
 
     df.to_csv(path, index=True)
 
+    torch.save(episode_rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--time', type=int, default=100)
     parser.add_argument('--n_episodes', type=int, default=100)
-    parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--epsilon', type=float, default=0.05)
-    parser.add_argument('--occlusion', type=int, default=0)
-    parser.add_argument('--plot', dest='plot', action='store_true')
-    parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
 
     main(**args)

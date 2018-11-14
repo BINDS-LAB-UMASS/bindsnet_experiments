@@ -185,7 +185,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs, best_action = policy(voltages['fc2'].sum(1), epsilon)
+            probs, best_action = policy(voltages['3'].sum(1), epsilon)
             action = np.random.choice(np.arange(len(probs)), p=probs)
 
             if action == 0:
@@ -239,12 +239,12 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             state = next_state
             obs = next_obs
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'rewards'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'epsilon', 'avg. reward', 'std. reward'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), rewards
+        seed, time, n_episodes, n_snn_episodes, percentile, epsilon, np.mean(rewards), np.std(rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -260,12 +260,14 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
     df.to_csv(path, index=True)
 
+    torch.save(rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--time', type=int, default=50)
-    parser.add_argument('--n_episodes', type=int, default=25)
+    parser.add_argument('--time', type=int, default=100)
+    parser.add_argument('--n_episodes', type=int, default=100)
     parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--epsilon', type=float, default=0.05)

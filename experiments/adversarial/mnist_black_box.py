@@ -155,15 +155,15 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     max_iters = 25
     delta = 0.1
-    epsilon = 1.0
+    epsilon = 0.5
 
     for i in range(n_examples):
         # Get next input sample.
-        image = images[i % len(images)].contiguous().view(-1)
+        original = images[i % len(images)].contiguous().view(-1)
         label = labels[i % len(images)]
 
         # Check if the image is correctly classified.
-        sample = poisson(datum=image, time=time)
+        sample = poisson(datum=original, time=time)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -177,10 +177,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             continue
 
         # Create adversarial example.
-        adv_example = None
         adversarial = False
         while not adversarial:
-            adv_example = 255 * torch.rand(image.size())
+            adv_example = 255 * torch.rand(original.size())
             sample = poisson(datum=adv_example, time=time)
             inpts = {'X': sample}
 
@@ -195,18 +194,53 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                 adversarial = True
 
         j = 0
-        original = image.clone()
+        current = original.clone()
         while j < max_iters:
             # Orthogonal perturbation.
-            perturb = orthogonal_perturbation(delta=delta, image=adv_example, target=original)
-            temp = adv_example + perturb
+            # perturb = orthogonal_perturbation(delta=delta, image=adv_example, target=original)
+            # temp = adv_example + perturb
 
             # # Forward perturbation.
             # temp = temp.clone() + forward_perturbation(epsilon * get_diff(temp, original), temp, adv_example)
 
-            print(temp)
+            # print(temp)
 
-            sample = poisson(datum=temp, time=time)
+            perturbation = torch.randn(original.size())
+
+            unnormed_source_direction = original - perturbation
+            source_norm = torch.norm(unnormed_source_direction)
+            source_direction = unnormed_source_direction / source_norm
+
+            dot = torch.dot(perturbation, source_direction)
+            perturbation -= dot * source_direction
+            perturbation *= epsilon * source_norm / torch.norm(perturbation)
+
+            D = 1 / np.sqrt(epsilon ** 2 + 1)
+            direction = perturbation - unnormed_source_direction
+            spherical_candidate = original + D * direction
+
+            spherical_candidate = torch.clamp(spherical_candidate, 0, 255)
+
+            new_source_direction = original - spherical_candidate
+            new_source_direction_norm = torch.norm(new_source_direction)
+
+            # length if spherical_candidate would be exactly on the sphere
+            length = delta * source_norm
+
+            # length including correction for deviation from sphere
+            deviation = new_source_direction_norm - source_norm
+            length += deviation
+
+            # make sure the step size is positive
+            length = max(0, length)
+
+            # normalize the length
+            length = length / new_source_direction_norm
+
+            candidate = spherical_candidate + length * new_source_direction
+            candidate = torch.clamp(candidate, 0, 255)
+
+            sample = poisson(datum=candidate, time=time)
             inpts = {'X': sample}
 
             # Run the network on the input.
@@ -219,7 +253,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             # Optionally plot various simulation information.
             if plot:
                 _input = original.view(side_length, side_length)
-                reconstruction = temp.view(side_length, side_length)
+                reconstruction = candidate.view(side_length, side_length)
                 _spikes = {
                     'X': spikes['X'].get('s').view(side_length ** 2, time),
                     'Y': spikes['Y'].get('s').view(n_neurons, time)
@@ -240,7 +274,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                 print('Attack failed.')
             else:
                 print('Attack succeeded.')
-                adv_example = temp
+                adv_example = candidate
 
             j += 1
 
