@@ -267,7 +267,7 @@ for i in range(n_examples):
 
     # Get next input sample.
     image = images[i].permute(2, 0, 1)
-    sample = bernoulli(datum=image, time=time, max_prob=1.0).unsqueeze(1)
+    sample = bernoulli(datum=image, time=time, dt=dt, max_prob=1.0).unsqueeze(1)
     inpts = {'X': sample}
 
     # Run the network on the input.
@@ -276,12 +276,9 @@ for i in range(n_examples):
     retries = 0
     while spikes['Y_'].get('s').sum() < 5 and retries < 3:
         retries += 1
-        sample = bernoulli(datum=image, time=time, max_prob=1.0).unsqueeze(1)
+        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=1.0).unsqueeze(1)
         inpts = {'X': sample}
         network.run(inpts=inpts, time=time)
-
-    # print(spikes['Y'].get('s').sum())
-    # print(spikes['Y_'].get('s').sum())
 
     # Add to spikes recording.
     spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)

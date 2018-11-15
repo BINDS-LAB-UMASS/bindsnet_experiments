@@ -198,7 +198,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
 
         # Get next input sample.
         image = images[i].view(-1)
-        sample = poisson(datum=image, time=time)
+        sample = poisson(datum=image, time=time, dt=dt)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -208,7 +208,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
             image *= 2
-            sample = poisson(datum=image, time=time)
+            sample = poisson(datum=image, time=time, dt=dt)
             inpts = {'X' : sample}
             network.run(inpts=inpts, time=time)
 

@@ -195,7 +195,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
 
         # Get next input sample.
         image = images[i % n_examples]
-        sample = rank_order(datum=image, time=time)
+        sample = rank_order(datum=image, time=time, dt=dt)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -205,7 +205,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
             image *= 2
-            sample = rank_order(datum=image, time=time)
+            sample = rank_order(datum=image, time=time, dt=dt)
             inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 

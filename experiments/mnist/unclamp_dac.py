@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
+
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
@@ -13,14 +14,12 @@ from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import DiehlAndCook2015v2
-from bindsnet.evaluation import assign_labels, update_ngram_scores
-from bindsnet.utils import get_square_weights, get_square_assignments
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
+from bindsnet.utils import get_square_weights
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments
 
 from experiments import ROOT_DIR
-from experiments.utils import update_curves, print_results
 
-model = 'diehl_and_cook_2015'
+model = 'unclamp_dac'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -34,8 +33,8 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=350, dt=1,
-         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False,
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=250, dt=1,
+         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=100, plot=False,
          train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -90,28 +89,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
 
     images = images.view(-1, 784)
     images *= intensity
-
-    # Record spikes during the simulation.
-    spike_record = torch.zeros(update_interval, time, n_neurons)
-
-    # Neuron assignments and spike proportions.
-    if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        ngram_scores = {}
-    else:
-        path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, ngram_scores = torch.load(open(path, 'rb'))
-
-    # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'ngram': []}
-    predictions = {
-        scheme: torch.Tensor().long() for scheme in curves.keys()
-    }
-
-    if train:
-        best_accuracy = 0
+    labels = labels.long()
 
     spikes = {}
     for layer in set(network.layers):
@@ -132,6 +110,16 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     assigns_im = None
     perf_ax = None
 
+    unclamps = {}
+    per_class = int(n_neurons / n_classes)
+    for label in range(n_classes):
+        unclamp = torch.ones(n_neurons).byte()
+        unclamp[label * per_class: (label + 1) * per_class] = 0
+        unclamps[label] = unclamp
+
+    predictions = torch.zeros(n_examples)
+    corrects = torch.zeros(n_examples)
+
     start = t()
     for i in range(n_examples):
         if i % progress_interval == 0:
@@ -139,54 +127,22 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            network.save(os.path.join(params_path, model_name + '.pt'))
+
             if train:
                 network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
 
-            if i % len(labels) == 0:
-                current_labels = labels[-update_interval:]
-            else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-            # Update and print accuracy evaluations.
-            curves, preds = update_curves(
-                curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, ngram_scores=ngram_scores, n=2
-            )
-            print_results(curves)
-
-            for scheme in preds:
-                predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
-
-            # Save accuracy curves to disk.
-            to_write = ['train'] + params if train else ['test'] + params
-            f = '_'.join([str(x) for x in to_write]) + '.pt'
-            torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
-
-            if train:
-                if any([x[-1] > best_accuracy for x in curves.values()]):
-                    print('New best accuracy! Saving network parameters to disk.')
-
-                    # Save network to disk.
-                    network.save(os.path.join(params_path, model_name + '.pt'))
-                    path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                    torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
-                    best_accuracy = max([x[-1] for x in curves.values()])
-
-                # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
-
-                # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
-
-            print()
-
         # Get next input sample.
         image = images[i % len(images)]
+        label = labels[i % len(images)].item()
         sample = poisson(datum=image, time=time, dt=dt)
         inpts = {'X': sample}
 
         # Run the network on the input.
-        network.run(inpts=inpts, time=time)
+        if train:
+            network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+        else:
+            network.run(inpts=inpts, time=time)
 
         retries = 0
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
@@ -194,10 +150,20 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
             image *= 2
             sample = poisson(datum=image, time=time, dt=dt)
             inpts = {'X': sample}
-            network.run(inpts=inpts, time=time)
 
-        # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y'].get('s').t()
+            if train:
+                network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+            else:
+                network.run(inpts=inpts, time=time)
+
+        output = spikes['Y'].get('s')
+        summed_neurons = output.sum(dim=1).view(per_class, n_classes)
+        summed_classes = summed_neurons.sum(dim=1)
+        prediction = torch.argmax(summed_classes).item()
+        correct = prediction == label
+
+        predictions[i] = prediction
+        corrects[i] = int(correct)
 
         # Optionally plot various simulation information.
         if plot:
@@ -206,13 +172,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
             input_exc_weights = network.connections[('X', 'Y')].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-            # square_assignments = get_square_assignments(assignments, n_sqrt)
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
-            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            # perf_ax = plot_performance(curves, ax=perf_ax)
 
             plt.pause(1e-8)
 
@@ -220,54 +183,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
 
     print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
-    i += 1
-
-    if i % len(labels) == 0:
-        current_labels = labels[-update_interval:]
-    else:
-        current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-    # Update and print accuracy evaluations.
-    curves, preds = update_curves(
-        curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, ngram_scores=ngram_scores, n=2
-    )
-    print_results(curves)
-
-    for scheme in preds:
-        predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
-
-    if train:
-        if any([x[-1] > best_accuracy for x in curves.values()]):
-            print('New best accuracy! Saving network parameters to disk.')
-
-            # Save network to disk.
-            if train:
-                network.save(os.path.join(params_path, model_name + '.pt'))
-                path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-                torch.save((assignments, proportions, rates, ngram_scores), open(path, 'wb'))
+    network.save(os.path.join(params_path, model_name + '.pt'))
 
     if train:
         print('\nTraining complete.\n')
     else:
         print('\nTest complete.\n')
 
-    print('Average accuracies:\n')
-    for scheme in curves.keys():
-        print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
+    accuracy = torch.mean(corrects).item() * 100
 
-    # Save accuracy curves to disk.
-    to_write = ['train'] + params if train else ['test'] + params
-    f = '_'.join([str(x) for x in to_write]) + '.pt'
-    torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
+    print(f'\nAccuracy: {accuracy}\n')
 
-    # Save results to disk.
-    results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
-    ]
-
-    to_write = params + results if train else test_params + results
+    to_write = params + [accuracy] if train else test_params + [accuracy]
     to_write = [str(x) for x in to_write]
     name = 'train.csv' if train else 'test.csv'
 
@@ -275,15 +202,13 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
-                    'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,'
+                    'theta_decay,intensity,progress_interval,update_interval,accuracy\n'
                 )
             else:
                 f.write(
-                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
-                    'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
-                    'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
+                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,'
+                    'theta_plus,theta_decay,intensity,progress_interval,update_interval,accuracy\n'
                 )
 
     with open(os.path.join(results_path, name), 'a') as f:
@@ -299,13 +224,11 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
                 labels = torch.cat([labels, labels])
 
     # Compute confusion matrices and save them to disk.
-    confusions = {}
-    for scheme in predictions:
-        confusions[scheme] = confusion_matrix(labels, predictions[scheme])
+    confusion = confusion_matrix(labels, predictions)
 
     to_write = ['train'] + params if train else ['test'] + test_params
     f = '_'.join([str(x) for x in to_write]) + '.pt'
-    torch.save(confusions, os.path.join(confusion_path, f))
+    torch.save(confusion, os.path.join(confusion_path, f))
 
 
 if __name__ == '__main__':
@@ -320,13 +243,13 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
-    parser.add_argument('--time', default=350, type=int, help='simulation time')
+    parser.add_argument('--time', default=250, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
     parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
-    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
+    parser.add_argument('--update_interval', default=100, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')

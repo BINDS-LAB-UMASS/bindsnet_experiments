@@ -254,7 +254,7 @@ for i in range(n_examples):
 
     # Get next input sample.
     image = images[i % len(images)]
-    sample = bernoulli(datum=image, time=time)
+    sample = bernoulli(datum=image, time=time, dt=dt)
     inpts = {'X': sample}
 
     # Run the network on the input.
@@ -264,7 +264,7 @@ for i in range(n_examples):
     while spikes['Y'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
-        sample = bernoulli(datum=image, time=time)
+        sample = bernoulli(datum=image, time=time, dt=dt)
         inpts = {'X': sample}
         network.run(inpts=inpts, time=time)
 

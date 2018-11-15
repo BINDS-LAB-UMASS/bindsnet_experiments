@@ -80,7 +80,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=16, stride=4, n_filter
     images = images.mean(-1)
 
     # Lazily encode data as Poisson spike trains.
-    data_loader = poisson_loader(data=images, time=time)
+    data_loader = poisson_loader(data=images, time=time, dt=dt)
 
     spikes = {}
     for layer in set(network.layers):

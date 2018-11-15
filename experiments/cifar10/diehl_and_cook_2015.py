@@ -209,7 +209,7 @@ for i in range(n_examples):
 
     # Get next input sample.
     image = images[i]
-    sample = poisson(datum=image, time=time)
+    sample = poisson(datum=image, time=time, dt=dt)
     inpts = {'X' : sample}
 
     # Run the network on the input.
@@ -219,7 +219,7 @@ for i in range(n_examples):
     while spikes['Ae'].get('s').sum() < 5 and retries < 3:
         retries += 1
         image *= 2
-        sample = poisson(datum=image, time=time)
+        sample = poisson(datum=image, time=time, dt=dt)
         inpts = {'X' : sample}
         network.run(inpts=inpts, time=time)
 

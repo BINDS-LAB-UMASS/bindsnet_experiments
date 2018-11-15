@@ -234,7 +234,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
         # Get next input sample.
         image = images[i % len(images)]
-        sample = bernoulli(datum=image, time=time, max_prob=0.5).unsqueeze(1).unsqueeze(1)
+        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5).unsqueeze(1).unsqueeze(1)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -243,7 +243,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         retries = 0
         while spikes['Y_'].get('s').sum() < 5 and retries < 3:
             retries += 1
-            sample = bernoulli(datum=image, time=time, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
+            sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
             inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 

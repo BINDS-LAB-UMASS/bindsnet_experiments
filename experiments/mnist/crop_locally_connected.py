@@ -35,7 +35,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), time=50, n_filters=25, crop=0,
+def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), time=100, n_filters=25, crop=0,
          lr=1e-2, lr_decay=0.99, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
          update_interval=250, train=True, test=False, relabel=False, plot=False, gpu=False):
 
@@ -107,8 +107,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     images *= intensity
     images = images[:, crop:-crop, crop:-crop]
 
-    test_images *= intensity
-    test_images = test_images[:, crop:-crop, crop:-crop]
+    if relabel:
+        test_images *= intensity
+        test_images = test_images[:, crop:-crop, crop:-crop]
 
     # Record spikes during the simulation.
     if relabel:
@@ -204,7 +205,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
         # Get next input sample.
         image = images[i % len(images)].contiguous().view(-1)
-        sample = poisson(datum=image, time=time)
+        sample = poisson(datum=image, time=time, dt=dt)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -214,7 +215,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
             retries += 1
             image *= 2
-            sample = poisson(datum=image, time=time)
+            sample = poisson(datum=image, time=time, dt=dt)
             inpts = {'X': sample}
             network.run(inpts=inpts, time=time)
 
@@ -273,7 +274,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
             # Get next input sample.
             image = test_images[i % len(test_images)].contiguous().view(-1)
-            sample = poisson(datum=image, time=time)
+            sample = poisson(datum=image, time=time, dt=dt)
             inpts = {'X': sample}
 
             # Run the network on the input.
@@ -283,7 +284,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             while spikes['Y'].get('s').sum() < 5 and retries < 3:
                 retries += 1
                 image *= 2
-                sample = poisson(datum=image, time=time)
+                sample = poisson(datum=image, time=time, dt=dt)
                 inpts = {'X': sample}
                 network.run(inpts=inpts, time=time)
 
@@ -415,7 +416,7 @@ if __name__ == '__main__':
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
     parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
-    parser.add_argument('--time', default=25, type=int, help='simulation time')
+    parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')

@@ -5,21 +5,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from time import time as t
-from sklearn.metrics import confusion_matrix
 
 from bindsnet.datasets import MNIST
-from bindsnet.encoding import poisson
 from bindsnet.learning import NoOp, MSTDP
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights
 from bindsnet.network.topology import Connection
 from bindsnet.network import load_network, Network
-from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.network.nodes import IFNodes, RealInput, DiehlAndCookNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
 
 from experiments import ROOT_DIR
-from experiments.utils import update_curves, print_results
 
 model = 'diehl_and_cook_2015'
 data = 'mnist'
