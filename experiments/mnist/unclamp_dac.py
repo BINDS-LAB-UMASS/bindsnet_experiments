@@ -13,8 +13,9 @@ from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
 from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
-from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.utils import get_square_weights
+from bindsnet.models import DiehlAndCook2015v2
+from bindsnet.learning import WeightDependentPostPre
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments
 
 from experiments import ROOT_DIR
@@ -33,9 +34,9 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=250, dt=1,
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2, lr_decay=1, time=250, dt=1,
          theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=100, plot=False,
-         train=True, gpu=False):
+         train=True, gpu=False, no_inhib=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
                             'No. examples must be divisible by update_interval'
@@ -68,9 +69,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     if train:
         network = DiehlAndCook2015v2(
             n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4,
-            theta_plus=theta_plus, theta_decay=theta_decay, nu_pre=0, nu_post=lr
+            theta_plus=theta_plus, theta_decay=theta_decay,
+            nu_pre=0, nu_post=lr, wmin=0, wmax=1
         )
 
+        network.layers['Y'].refrac = 0
+        network.layers['Y'].reset = 0
+        network.layers['Y'].rest = 0
+        network.layers['Y'].thresh = 1
+
+        network.connections['X', 'Y'].update_rule = WeightDependentPostPre(
+            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        )
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -78,6 +88,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         )
         network.layers['Y'].theta_decay = 0
         network.layers['Y'].theta_plus = 0
+
+        if no_inhib:
+            del network.connections['Y', 'Y']
 
     # Load MNIST data.
     dataset = MNIST(path=data_path, download=True)
@@ -126,11 +139,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
             start = t()
 
-        if i % update_interval == 0 and i > 0:
+        if i % update_interval == 0 and i > 0 and train:
             network.save(os.path.join(params_path, model_name + '.pt'))
-
-            if train:
-                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+            network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
 
         # Get next input sample.
         image = images[i % len(images)]
@@ -144,17 +155,17 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         else:
             network.run(inpts=inpts, time=time)
 
-        retries = 0
-        while spikes['Y'].get('s').sum() < 5 and retries < 3:
-            retries += 1
-            image *= 2
-            sample = poisson(datum=image, time=time, dt=dt)
-            inpts = {'X': sample}
-
-            if train:
-                network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
-            else:
-                network.run(inpts=inpts, time=time)
+        # retries = 0
+        # while spikes['Y'].get('s').sum() < 5 and retries < 3:
+        #     retries += 1
+        #     image *= 2
+        #     sample = poisson(datum=image, time=time, dt=dt)
+        #     inpts = {'X': sample}
+        #
+        #     if train:
+        #         network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+        #     else:
+        #         network.run(inpts=inpts, time=time)
 
         output = spikes['Y'].get('s')
         summed_neurons = output.sum(dim=1).view(per_class, n_classes)
@@ -170,7 +181,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
             # _input = image.view(28, 28)
             # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
-            input_exc_weights = network.connections[('X', 'Y')].w
+            input_exc_weights = network.connections['X', 'Y'].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
@@ -183,7 +194,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
 
     print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
-    network.save(os.path.join(params_path, model_name + '.pt'))
+    if train:
+        network.save(os.path.join(params_path, model_name + '.pt'))
 
     if train:
         print('\nTraining complete.\n')
@@ -240,21 +252,22 @@ if __name__ == '__main__':
     parser.add_argument('--n_neurons', type=int, default=100, help='no. of output layer neurons')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
+    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=250, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=100, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')
     parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
-    parser.set_defaults(plot=False, gpu=False, train=True)
+    parser.add_argument('--no-inhib', dest='no_inhib', action='store_true', help='whether to remove inhibition on test.')
+    parser.set_defaults(plot=False, gpu=False, train=True, no_inhib=False)
     args = parser.parse_args()
 
     args = vars(args)
