@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-for seed in 0 1 2 3 4
+for seed in 0 1 2
 do
     for n_neurons in 100 250 500
     do 
@@ -10,7 +10,7 @@ do
             do
                 for inhib in 250
                 do
-                    for time in 50 100
+                    for time in 50 100 250
                     do
                         for theta_plus in 0.05
                         do
@@ -18,7 +18,7 @@ do
                             do
                                 for intensity in 4
                                 do
-                                    for lr in 0.01 0.005
+                                    for lr in 1e-2
                                     do
                                         for lr_decay in 1 0.99
                                         do

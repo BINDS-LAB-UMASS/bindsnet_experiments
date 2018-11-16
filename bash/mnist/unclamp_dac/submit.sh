@@ -17,7 +17,7 @@ theta_plus=${7:-0.05}
 theta_decay=${8:-1e-7}
 intensity=${9:-0.5}
 lr=${10:-0.01}
-lr_decay=${11:0.99}
+lr_decay=${11:-0.99}
 
 cd ../../../experiments/mnist/
 source activate py36

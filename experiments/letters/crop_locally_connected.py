@@ -102,11 +102,11 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     dataset = EMNIST(root=data_path, split='letters', train=train, download=True)
 
     if train:
-        images = dataset.train_data
-        labels = dataset.train_labels
+        images = dataset.train_data.float()
+        labels = dataset.train_labels.long()
     else:
-        images = dataset.test_data
-        labels = dataset.test_labels
+        images = dataset.test_data.float()
+        labels = dataset.test_labels.long()
 
     if gpu:
         images = images.cuda()
