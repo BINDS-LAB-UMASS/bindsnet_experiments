@@ -155,17 +155,17 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         else:
             network.run(inpts=inpts, time=time)
 
-        # retries = 0
-        # while spikes['Y'].get('s').sum() < 5 and retries < 3:
-        #     retries += 1
-        #     image *= 2
-        #     sample = poisson(datum=image, time=time, dt=dt)
-        #     inpts = {'X': sample}
-        #
-        #     if train:
-        #         network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
-        #     else:
-        #         network.run(inpts=inpts, time=time)
+        retries = 0
+        while spikes['Y'].get('s').sum() < 5 and retries < 3:
+            retries += 1
+            image *= 1.5
+            sample = poisson(datum=image, time=time, dt=dt)
+            inpts = {'X': sample}
+
+            if train:
+                network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+            else:
+                network.run(inpts=inpts, time=time)
 
         output = spikes['Y'].get('s')
         summed_neurons = output.sum(dim=1).view(n_classes, per_class)
