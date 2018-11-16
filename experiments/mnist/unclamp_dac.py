@@ -168,7 +168,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         #         network.run(inpts=inpts, time=time)
 
         output = spikes['Y'].get('s')
-        summed_neurons = output.sum(dim=1).view(per_class, n_classes)
+        summed_neurons = output.sum(dim=1).view(n_classes, per_class)
         summed_classes = summed_neurons.sum(dim=1)
         prediction = torch.argmax(summed_classes).item()
         correct = prediction == label
