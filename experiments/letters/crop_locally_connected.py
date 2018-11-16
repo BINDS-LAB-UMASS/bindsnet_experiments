@@ -101,8 +101,12 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     # Load EMNIST data.
     dataset = EMNIST(root=data_path, split='letters', train=train, download=True)
 
-    images = dataset.data
-    labels = dataset.targets
+    if train:
+        images = dataset.train_data
+        labels = dataset.train_labels
+    else:
+        images = dataset.test_data
+        labels = dataset.test_labels
 
     if gpu:
         images = images.cuda()
