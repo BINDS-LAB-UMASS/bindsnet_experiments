@@ -113,6 +113,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         labels = labels.cuda()
 
     images *= intensity
+    labels -= 1
 
     if crop != 0:
         images = images[:, crop:-crop, crop:-crop]
