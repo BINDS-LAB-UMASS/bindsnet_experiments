@@ -52,6 +52,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     model_name = '_'.join([str(x) for x in params])
 
+    print(model_name)
+
     if not train:
         test_params = [
             seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,

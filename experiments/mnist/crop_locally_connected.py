@@ -37,10 +37,9 @@ for path in [params_path, curves_path, results_path, confusion_path]:
 
 def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), time=100, n_filters=25, crop=0,
          lr=1e-2, lr_decay=0.99, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2, progress_interval=10,
-         update_interval=250, train=True, test=False, relabel=False, plot=False, gpu=False):
+         update_interval=250, train=True, plot=False, gpu=False):
 
-    assert train + test + relabel == 1
-    assert n_train % update_interval == 0 and n_test % update_interval == 0 or relabel, \
+    assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
     params = [
@@ -50,7 +49,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     model_name = '_'.join([str(x) for x in params])
 
-    if test or relabel:
+    if not train:
         test_params = [
             seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
             theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
@@ -98,25 +97,14 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     if train:
         images, labels = dataset.get_train()
-    elif test:
+    else:
         images, labels = dataset.get_test()
-    elif relabel:
-        images, labels = dataset.get_train()
-        test_images, test_labels = dataset.get_test()
 
     images *= intensity
     images = images[:, crop:-crop, crop:-crop]
 
-    if relabel:
-        test_images *= intensity
-        test_images = test_images[:, crop:-crop, crop:-crop]
-
     # Record spikes during the simulation.
-    if relabel:
-        update_interval = n_examples
-        spike_record = torch.zeros(update_interval, n_neurons)
-    else:
-        spike_record = torch.zeros(update_interval, time, n_neurons)
+    spike_record = torch.zeros(update_interval, time, n_neurons)
 
     # Neuron assignments and spike proportions.
     if train:
@@ -145,10 +133,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     # Train the network.
     if train:
         print('\nBegin training.\n')
-    elif test:
+    else:
         print('\nBegin test.\n')
-    elif relabel:
-        print('\nBegin relabel.\n')
 
     spike_ims = None
     spike_axes = None
@@ -220,10 +206,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             network.run(inpts=inpts, time=time)
 
         # Add to spikes recording.
-        if relabel:
-            spike_record[i % update_interval] = spikes['Y'].get('s').sum(1)
-        else:
-            spike_record[i % update_interval] = spikes['Y'].get('s').t()
+        spike_record[i % update_interval] = spikes['Y'].get('s').t()
 
         # Optionally plot various simulation information.
         if plot:
@@ -260,62 +243,15 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             else:
                 labels = torch.cat([labels, labels])
 
-    if relabel:
-        logreg = LogisticRegression(n_jobs=-1, solver='lbfgs')
-        logreg.fit(spike_record, labels)
+    # Update and print accuracy evaluations.
+    curves, preds = update_curves(
+        curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
+        proportions=proportions, ngram_scores=ngram_scores, n=2
+    )
+    print_results(curves)
 
-        accuracy = (logreg.predict(spike_record) == labels).float().mean().item() * 100
-        print(f'\nTraining accuracy after relabeling: {accuracy}.\n')
-
-        for i in range(n_examples):
-            if i % progress_interval == 0:
-                print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
-                start = t()
-
-            # Get next input sample.
-            image = test_images[i % len(test_images)].contiguous().view(-1)
-            sample = poisson(datum=image, time=time, dt=dt)
-            inpts = {'X': sample}
-
-            # Run the network on the input.
-            network.run(inpts=inpts, time=time)
-
-            retries = 0
-            while spikes['Y'].get('s').sum() < 5 and retries < 3:
-                retries += 1
-                image *= 2
-                sample = poisson(datum=image, time=time, dt=dt)
-                inpts = {'X': sample}
-                network.run(inpts=inpts, time=time)
-
-            # Add to spikes recording.
-            if relabel:
-                spike_record[i % update_interval] = spikes['Y'].get('s').sum(1)
-
-        i += 1
-
-        if test_labels.numel() > n_examples:
-            test_labels = test_labels[:n_examples]
-        else:
-            while test_labels.numel() < n_examples:
-                if 2 * test_labels.numel() > n_examples:
-                    test_labels = torch.cat([test_labels, test_labels[:n_examples - test_labels.numel()]])
-                else:
-                    test_labels = torch.cat([test_labels, test_labels])
-
-        test_accuracy = (logreg.predict(spike_record) == test_labels).float().mean().item() * 100
-        print(f'\nTest accuracy after relabeling: {test_accuracy}\n')
-
-    if not relabel:
-        # Update and print accuracy evaluations.
-        curves, preds = update_curves(
-            curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-            proportions=proportions, ngram_scores=ngram_scores, n=2
-        )
-        print_results(curves)
-
-        for scheme in preds:
-            predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
+    for scheme in preds:
+        predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
     if train:
         if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -328,44 +264,32 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     if train:
         print('\nTraining complete.\n')
-    elif test:
-        print('\nTest complete.\n')
-    elif relabel:
-        print('\nRelabeling complete.\n')
-
-    if not relabel:
-        print('Average accuracies:\n')
-        for scheme in curves.keys():
-            print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
-
-        # Save accuracy curves to disk.
-        if train:
-            to_write = ['train'] + params
-            f = '_'.join([str(x) for x in to_write]) + '.pt'
-            torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
-
-        # Save results to disk.
-        results = [
-            np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
-            np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
-        ]
-
-        to_write = params + results if train else test_params + results
-        to_write = [str(x) for x in to_write]
     else:
-        results = [
-            test_accuracy
-        ]
+        print('\nTest complete.\n')
 
-        to_write = test_params + results
-        to_write = [str(x) for x in to_write]
+    print('Average accuracies:\n')
+    for scheme in curves.keys():
+        print('\t%s: %.2f' % (scheme, float(np.mean(curves[scheme]))))
 
+    # Save accuracy curves to disk.
+    if train:
+        to_write = ['train'] + params
+        f = '_'.join([str(x) for x in to_write]) + '.pt'
+        torch.save((curves, update_interval, n_examples), open(os.path.join(curves_path, f), 'wb'))
+
+    # Save results to disk.
+    results = [
+        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['ngram']),
+        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['ngram'])
+    ]
+
+    to_write = params + results if train else test_params + results
+    to_write = [str(x) for x in to_write]
+    
     if train:
         name = 'train.csv'
-    elif test:
+    else:
         name = 'test.csv'
-    elif relabel:
-        name = 'relabel.csv'
 
     if not os.path.isfile(os.path.join(results_path, name)):
         with open(os.path.join(results_path, name), 'w') as f:
@@ -375,30 +299,24 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                     'theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
-            elif test:
+            else:
                 f.write(
                     'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
                     'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,mean_all_activity,'
                     'mean_proportion_weighting,mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
-            elif relabel:
-                f.write(
-                    'random_seed,kernel_size,stride,n_filters,crop,lr,lr_decay,n_train,n_test,inhib,time,timestep,'
-                    'theta_plus,theta_decay,intensity,norm,progress_interval,update_interval,accuracy\n'
-                )
 
     with open(os.path.join(results_path, name), 'a') as f:
         f.write(','.join(to_write) + '\n')
 
-    if not relabel:
-        # Compute confusion matrices and save them to disk.
-        confusions = {}
-        for scheme in predictions:
-            confusions[scheme] = confusion_matrix(labels, predictions[scheme])
+    # Compute confusion matrices and save them to disk.
+    confusions = {}
+    for scheme in predictions:
+        confusions[scheme] = confusion_matrix(labels, predictions[scheme])
 
-        to_write = ['train'] + params if train else ['test'] + test_params
-        f = '_'.join([str(x) for x in to_write]) + '.pt'
-        torch.save(confusions, os.path.join(confusion_path, f))
+    to_write = ['train'] + params if train else ['test'] + test_params
+    f = '_'.join([str(x) for x in to_write]) + '.pt'
+    torch.save(confusions, os.path.join(confusion_path, f))
 
 
 if __name__ == '__main__':
@@ -426,11 +344,9 @@ if __name__ == '__main__':
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
-    parser.add_argument('--no-train', dest='train', action='store_false', help='train phase')
-    parser.add_argument('--test', dest='test', action='store_true', help='test phase')
-    parser.add_argument('--relabel', dest='relabel', action='store_true')
+    parser.add_argument('--test', dest='train', action='store_false', help='train phase')
     parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
-    parser.set_defaults(plot=False, gpu=False, train=True, test=False, relabel=False)
+    parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
 
     kernel_size = args.kernel_size
