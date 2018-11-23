@@ -34,7 +34,7 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2, lr_decay=1, time=250, dt=1,
+def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2, lr_decay=1, time=100, dt=1,
          theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=100, plot=False,
          train=True, gpu=False, no_inhib=False):
 
@@ -157,6 +157,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
 
         retries = 0
         while spikes['Y'].get('s').sum() < 5 and retries < 3:
+            print('Retrying...')
+
             retries += 1
             image *= 1.5
             sample = poisson(datum=image, time=time, dt=dt)
@@ -255,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
-    parser.add_argument('--time', default=250, type=int, help='simulation time')
+    parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')

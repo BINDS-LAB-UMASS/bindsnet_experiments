@@ -161,7 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_decay', type=float, default=0.99)
     parser.add_argument('--time', type=int, default=50)
     parser.add_argument('--dt', type=int, default=1.0)
-    parser.add_argument('--intensity', type=float, default=1)
+    parser.add_argument('--intensity', type=float, default=5)
     parser.add_argument('--progress_interval', type=int, default=10)
     parser.add_argument('--update_interval', type=int, default=250)
     parser.add_argument('--train', dest='train', action='store_true')

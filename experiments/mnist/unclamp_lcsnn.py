@@ -10,12 +10,11 @@ from sklearn.metrics import confusion_matrix
 
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.network import load_network, Network
 from bindsnet.utils import get_square_weights
 from bindsnet.network.monitors import Monitor
-from bindsnet.network.topology import Connection
-from bindsnet.models import LocallyConnectedNetwork
-from bindsnet.network.nodes import DiehlAndCookNodes
+from bindsnet.network.topology import Connection, LocallyConnectedConnection
+from bindsnet.network.nodes import DiehlAndCookNodes, LIFNodes, Input
 from bindsnet.learning import NoOp, WeightDependentPostPre
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_weights
 
@@ -37,10 +36,9 @@ for path in [params_path, curves_path, results_path, confusion_path]:
 
 def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stride=(2,), n_filters=25, n_output=100,
          time=100, crop=0, lr=1e-2, lr_decay=0.99, dt=1, theta_plus=0.05, theta_decay=1e-7, intensity=1, norm=0.2,
-         progress_interval=10, update_interval=250, train=True, test=False, relabel=False, plot=False, gpu=False):
+         progress_interval=10, update_interval=250, train=True, plot=False, gpu=False):
 
-    assert train + test + relabel == 1
-    assert n_train % update_interval == 0 and n_test % update_interval == 0 or relabel, \
+    assert n_train % update_interval == 0 and n_test % update_interval == 0, \
         'No. examples must be divisible by update_interval'
 
     params = [
@@ -50,7 +48,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     model_name = '_'.join([str(x) for x in params])
 
-    if test or relabel:
+    if not train:
         test_params = [
             seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_train, n_test, inhib, time, dt,
             theta_plus, theta_decay, intensity, norm, progress_interval, update_interval
@@ -71,25 +69,50 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     # Build network.
     if train:
-        network = LocallyConnectedNetwork(
-            n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=0, nu_post=lr, theta_plus=theta_plus,
-            theta_decay=theta_decay, wmin=0.0, wmax=1.0, norm=norm
+        network = Network()
+
+        conv_size = (
+            int((side_length - kernel_size) / stride) + 1,
+            int((side_length - kernel_size) / stride) + 1
         )
+
+        input_layer = Input(n=n_inpt, traces=True, trace_tc=5e-2)
 
         output_layer = DiehlAndCookNodes(
-            n=n_output, traces=True, rest=0, reset=0, thresh=1, refrac=0,
-            decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
+            n=n_filters * conv_size[0] * conv_size[1], traces=True, rest=0, reset=0,
+            thresh=1, refrac=0, decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus,
+            theta_decay=theta_decay
+        )
+        input_output_conn = LocallyConnectedConnection(
+            input_layer, output_layer, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
+            nu=[0, lr], update_rule=WeightDependentPostPre, wmin=0, wmax=1,
+            norm=norm, input_shape=(side_length, side_length)
         )
 
-        conv_size = network.connections['X', 'Y'].conv_size
-        conv_prod = int(np.prod(conv_size))
-        n_neurons = n_filters * conv_prod
+        w = torch.zeros(n_filters, *conv_size, n_filters, *conv_size)
+        for fltr1 in range(n_filters):
+            for fltr2 in range(n_filters):
+                if fltr1 != fltr2:
+                    for i in range(conv_size[0]):
+                        for j in range(conv_size[1]):
+                            w[fltr1, i, j, fltr2, i, j] = -inhib
+
+        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+        recurrent_conn = Connection(output_layer, output_layer, w=w)
+
+        network.add_layer(input_layer, name='X')
+        network.add_layer(output_layer, name='Y')
+        network.add_connection(input_output_conn, source='X', target='Y')
+        network.add_connection(recurrent_conn, source='Y', target='Y')
+
+        output_layer = LIFNodes(
+            n=n_output, traces=True, rest=0, reset=0, thresh=1, refrac=0, decay=1e-2, trace_tc=5e-2
+        )
 
         hidden_output_connection = Connection(
             network.layers['Y'], output_layer, nu=[0, 5 * lr],
             update_rule=WeightDependentPostPre, wmin=0,
-            wmax=1, norm=0.75 * norm * n_neurons
+            wmax=1, norm=norm * n_output
         )
 
         w = -inhib * (torch.ones(n_output, n_output) - torch.diag(torch.ones(n_output)))
@@ -102,11 +125,26 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         network.add_connection(output_recurrent_connection, source='Z', target='Z')
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
+
         network.connections['X', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
+
+        network.layers['Y'].theta = 0
         network.layers['Y'].theta_decay = 0
         network.layers['Y'].theta_plus = 0
+
+        # del network.connections['Y', 'Y']
+
+        network.connections['Y', 'Z'].update_rule = NoOp(
+            connection=network.connections['Y', 'Z'], nu=0
+        )
+
+        # network.layers['Z'].theta = 0
+        # network.layers['Z'].theta_decay = 0
+        # network.layers['Z'].theta_plus = 0
+
+        # del network.connections['Z', 'Z']
 
     conv_size = network.connections['X', 'Y'].conv_size
     locations = network.connections['X', 'Y'].locations
@@ -122,7 +160,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     if train:
         images, labels = dataset.get_train()
-    elif test:
+    else:
         images, labels = dataset.get_test()
 
     images *= intensity
@@ -136,7 +174,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     # Train the network.
     if train:
         print('\nBegin training.\n')
-    elif test:
+    else:
         print('\nBegin test.\n')
 
     spike_ims = None
@@ -161,9 +199,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             start = t()
 
         if i % update_interval == 0 and i > 0:
-            network.save(os.path.join(params_path, model_name + '.pt'))
-
             if train:
+                network.save(os.path.join(params_path, model_name + '.pt'))
                 network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
 
         # Get next input sample.
@@ -178,17 +215,18 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         else:
             network.run(inpts=inpts, time=time)
 
-        retries = 0
-        while spikes['Z'].get('s').sum() < 5 and retries < 3:
-            retries += 1
-            image *= 2
-            sample = poisson(datum=image, time=time, dt=dt)
-            inpts = {'X': sample}
+        if not train:
+            retries = 0
+            while spikes['Z'].get('s').sum() < 5 and retries < 3:
+                retries += 1
+                image *= 1.5
+                sample = poisson(datum=image, time=time, dt=dt)
+                inpts = {'X': sample}
 
-            if train:
-                network.run(inpts=inpts, time=time, unclamp={'Z': unclamps[label]})
-            else:
-                network.run(inpts=inpts, time=time)
+                if train:
+                    network.run(inpts=inpts, time=time, unclamp={'Z': unclamps[label]})
+                else:
+                    network.run(inpts=inpts, time=time)
 
         output = spikes['Z'].get('s')
         summed_neurons = output.sum(dim=1).view(per_class, n_classes)
@@ -214,11 +252,12 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
             )
 
             n_sqrt = int(np.ceil(np.sqrt(n_output)))
+            side = int(np.ceil(np.sqrt(network.layers['Y'].n)))
             w = network.connections['Y', 'Z'].w
-            w = get_square_weights(w, n_sqrt=n_sqrt, side=15)
+            w = get_square_weights(w, n_sqrt=n_sqrt, side=side)
 
             weights2_im = plot_weights(
-                w, im=weights2_im
+                w, im=weights2_im, wmax=1
             )
 
             plt.pause(1e-8)
@@ -227,7 +266,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
-    network.save(os.path.join(params_path, model_name + '.pt'))
+    if train:
+        network.save(os.path.join(params_path, model_name + '.pt'))
 
     if train:
         print('\nTraining complete.\n')
@@ -289,22 +329,21 @@ if __name__ == '__main__':
     parser.add_argument('--n_filters', type=int, default=25, help='no. of locally connected filters')
     parser.add_argument('--n_output', type=int, default=100, help='no. of output neurons')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
-    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
+    parser.add_argument('--lr', type=float, default=0.025, help='post-synaptic learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
     parser.add_argument('--norm', type=float, default=0.2, help='plastic synaptic weight normalization constant')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
-    parser.add_argument('--no-train', dest='train', action='store_false', help='train phase')
-    parser.add_argument('--test', dest='test', action='store_true', help='test phase')
+    parser.add_argument('--test', dest='train', action='store_false', help='test phase')
     parser.add_argument('--gpu', dest='gpu', action='store_true', help='whether to use cpu or gpu tensors')
-    parser.set_defaults(plot=False, gpu=False, train=True, test=False, relabel=False)
+    parser.set_defaults(plot=False, gpu=False, train=True)
     args = parser.parse_args()
 
     kernel_size = args.kernel_size

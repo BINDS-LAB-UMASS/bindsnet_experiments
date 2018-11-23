@@ -324,7 +324,7 @@ if __name__ == '__main__':
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=1, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
