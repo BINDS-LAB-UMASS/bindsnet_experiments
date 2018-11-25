@@ -70,7 +70,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu_pre=.1 * lr, nu_post=lr, theta_plus=theta_plus,
+            n_filters=n_filters, inh=inhib, dt=dt, nu=[.1 * lr, lr], theta_plus=theta_plus,
             theta_decay=theta_decay, wmin=0, wmax=1.0, norm=norm
         )
         network.layers['Y'].thresh = 1

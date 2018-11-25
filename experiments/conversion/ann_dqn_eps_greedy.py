@@ -78,6 +78,8 @@ def main(seed=0, n_episodes=25, epsilon=0.05):
     noop_counter = 0
     total_t = 0
     states = []
+    new_life = True
+    prev_life = 5
 
     for i in range(n_episodes):
         obs = environment.reset().to(device)
@@ -102,8 +104,18 @@ def main(seed=0, n_episodes=25, epsilon=0.05):
                 action = np.random.choice([0, 1, 2, 3])
                 noop_counter = 0
 
-            next_obs, reward, done, _ = environment.step(action)
+            if new_life:
+                action = 1
+
+            next_obs, reward, done, info = environment.step(action)
             next_obs = next_obs.to(device)
+
+            if prev_life - info["ale.lives"] != 0:
+                new_life = True
+            else:
+                new_life = False
+
+            prev_life = info["ale.lives"]
 
             next_state = torch.clamp(next_obs - obs, min=0)
             next_state = torch.cat(

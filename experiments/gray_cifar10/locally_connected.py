@@ -105,7 +105,7 @@ if train:
                 w[locations[k, c], f * (conv_size ** 2) + c] = np.random.beta(0.25, 0.25)
 
     conv_conn = Connection(input_layer, conv_layer, w=w, update_rule=post_pre,
-                           norm=0.02 * kernel_size ** 2, nu_pre=0, nu_post=1e-3, wmin=0.0, wmax=0.1)
+                           norm=0.02 * kernel_size ** 2, nu=[0, 1e-3], wmin=0.0, wmax=0.1)
 
     w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
     for fltr1 in range(n_filters):

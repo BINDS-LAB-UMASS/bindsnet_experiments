@@ -71,7 +71,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     if train:
         network = DiehlAndCook2015v2(
             n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4,
-            theta_plus=theta_plus, theta_decay=theta_decay, nu_pre=0, nu_post=lr,
+            theta_plus=theta_plus, theta_decay=theta_decay, nu=[0, lr],
             wmin=0, wmax=1
         )
 

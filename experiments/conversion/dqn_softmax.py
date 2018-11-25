@@ -20,8 +20,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_conversion')
-params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_conversion')
+results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_softmax')
+params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_softmax')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -185,7 +185,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs = torch.softmax(voltages['fc2'].sum(1), 0)
+            probs = torch.softmax(voltages['3'].sum(1), 0)
             action = torch.multinomial(probs, 1)
 
             if action == 0:
@@ -197,8 +197,18 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
                 action = np.random.choice([0, 1, 2, 3])
                 noop_counter = 0
 
+            if new_life:
+                action = 1
+
             next_obs, reward, done, info = environment.step(action)
             next_obs = next_obs.to(device)
+
+            if prev_life - info["ale.lives"] != 0:
+                new_life = True
+            else:
+                new_life = False
+
+            prev_life = info["ale.lives"]
 
             next_state = torch.clamp(next_obs - obs, min=0)
             next_state = torch.cat(
@@ -255,7 +265,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=50)
-    parser.add_argument('--n_episodes', type=int, default=25)
+    parser.add_argument('--n_episodes', type=int, default=100)
     parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--plot', dest='plot', action='store_true')

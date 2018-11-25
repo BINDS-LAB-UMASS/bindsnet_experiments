@@ -80,7 +80,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=100, kernel_size=(16,), stri
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=784, input_shape=[28, 28], kernel_size=kernel_size, stride=stride, n_filters=n_filters, inh=inhib,
-            dt=dt, nu_pre=0, nu_post=(350 / time) * 1e-2, theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0,
+            dt=dt, nu=[0, (350 / time) * 1e-2], theta_plus=theta_plus, theta_decay=theta_decay, wmin=0.0,
             wmax=1.0, norm=0.2
         )
     else:

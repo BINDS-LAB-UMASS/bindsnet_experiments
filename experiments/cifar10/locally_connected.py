@@ -111,14 +111,10 @@ if train:
 
     w = w.view(input_layer.n, conv_layer.n)
 
-    conv_conn = Connection(input_layer,
-                           conv_layer,
-                           w=w,
-                           update_rule=post_pre,
-                           norm=0.6 * kernel_size ** 2,
-                           nu_pre=0,
-                           nu_post=2e-4,
-                           wmax=1.0)
+    conv_conn = Connection(
+        input_layer, conv_layer, w=w, update_rule=post_pre,
+        norm=0.6 * kernel_size ** 2, nu=[0, 2e-4], wmax=1.0
+    )
 
     w = torch.zeros(n_filters, conv_size, conv_size, n_filters, conv_size, conv_size)
     for fltr1 in range(n_filters):
