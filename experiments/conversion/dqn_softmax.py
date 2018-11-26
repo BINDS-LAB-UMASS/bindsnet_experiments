@@ -241,10 +241,10 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
     model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'rewards'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'std. reward'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), rewards
+        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), np.std(rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
