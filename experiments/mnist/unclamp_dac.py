@@ -16,9 +16,8 @@ from bindsnet.network.monitors import Monitor
 from bindsnet.network.nodes import DiehlAndCookNodes, Input
 from bindsnet.network.topology import Connection
 from bindsnet.utils import get_square_weights
-from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.learning import WeightDependentPostPre
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_voltages
 
 from experiments import ROOT_DIR
 
@@ -116,10 +115,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     images *= intensity
     labels = labels.long()
 
-    spikes = {}
+    monitors = {}
     for layer in set(network.layers):
-        spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
-        network.add_monitor(spikes[layer], name='%s_spikes' % layer)
+        if 'v' in network.layers[layer].__dict__:
+            monitors[layer] = Monitor(network.layers[layer], state_vars=['s', 'v'], time=time)
+        else:
+            monitors[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
+
+        network.add_monitor(monitors[layer], name=layer)
 
     # Train the network.
     if train:
@@ -131,8 +134,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     inpt_ims = None
     spike_ims = None
     spike_axes = None
+    voltage_ims = None
+    voltage_axes = None
     weights_im = None
-    perf_ax = None
 
     unclamps = {}
     per_class = int(n_neurons / n_classes)
@@ -166,19 +170,20 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         else:
             network.run(inpts=inpts, time=time)
 
-        retries = 0
-        while spikes['Y'].get('s').sum() == 0 and retries < 3:
-            retries += 1
-            image *= 1.5
-            sample = poisson(datum=image, time=time, dt=dt)
-            inpts = {'X': sample}
+        if not train:
+            retries = 0
+            while monitors['Y'].get('s').sum() == 0 and retries < 3:
+                retries += 1
+                image *= 1.5
+                sample = poisson(datum=image, time=time, dt=dt)
+                inpts = {'X': sample}
 
-            if train:
-                network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
-            else:
-                network.run(inpts=inpts, time=time)
+                if train:
+                    network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+                else:
+                    network.run(inpts=inpts, time=time)
 
-        output = spikes['Y'].get('s')
+        output = monitors['Y'].get('s')
         summed_neurons = output.sum(dim=1).view(n_classes, per_class)
         summed_classes = summed_neurons.sum(dim=1)
         prediction = torch.argmax(summed_classes).item()
@@ -191,12 +196,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         if plot:
             # _input = image.view(28, 28)
             # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
-            _spikes = {layer: spikes[layer].get('s') for layer in spikes}
+            s = {layer: monitors[layer].get('s') for layer in monitors}
+            v = {'Y': monitors['Y'].get('v')}
             input_exc_weights = network.connections['X', 'Y'].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
-            spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
+            spike_ims, spike_axes = plot_spikes(s, ims=spike_ims, axes=spike_axes)
+            voltage_ims, voltage_axes = plot_voltages(v, ims=voltage_ims, axes=voltage_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
 
             plt.pause(1e-8)
@@ -270,7 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=100, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
