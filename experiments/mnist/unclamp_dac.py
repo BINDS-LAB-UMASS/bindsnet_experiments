@@ -11,12 +11,14 @@ from sklearn.metrics import confusion_matrix
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.network import load_network, Network
 from bindsnet.network.monitors import Monitor
+from bindsnet.network.nodes import DiehlAndCookNodes, Input
+from bindsnet.network.topology import Connection
 from bindsnet.utils import get_square_weights
 from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.learning import WeightDependentPostPre
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights
 
 from experiments import ROOT_DIR
 
@@ -67,20 +69,30 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
 
     # Build network.
     if train:
-        network = DiehlAndCook2015v2(
-            n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4,
-            theta_plus=theta_plus, theta_decay=theta_decay,
-            nu=[0, lr], wmin=0, wmax=1
-        )
+        network = Network()
 
-        network.layers['Y'].refrac = 0
-        network.layers['Y'].reset = 0
-        network.layers['Y'].rest = 0
-        network.layers['Y'].thresh = 1
+        input_layer = Input(n=784, traces=True, trace_tc=5e-2)
+        network.add_layer(input_layer, name='X')
 
-        network.connections['X', 'Y'].update_rule = WeightDependentPostPre(
-            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        output_layer = DiehlAndCookNodes(
+            n=n_neurons, traces=True, rest=0, reset=0, thresh=5, refrac=0,
+            decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
         )
+        network.add_layer(output_layer, name='Y')
+
+        w = 0.3 * torch.rand(784, n_neurons)
+        input_connection = Connection(
+            source=network.layers['X'], target=network.layers['Y'], w=w, update_rule=WeightDependentPostPre,
+            nu=[0, lr], wmin=0, wmax=1, norm=78.4
+        )
+        network.add_connection(input_connection, source='X', target='Y')
+
+        w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
+        recurrent_connection = Connection(
+            source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
+        )
+        network.add_connection(recurrent_connection, source='Y', target='Y')
+
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -120,7 +132,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     spike_ims = None
     spike_axes = None
     weights_im = None
-    assigns_im = None
     perf_ax = None
 
     unclamps = {}
@@ -156,9 +167,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             network.run(inpts=inpts, time=time)
 
         retries = 0
-        while spikes['Y'].get('s').sum() < 5 and retries < 3:
-            print('Retrying...')
-
+        while spikes['Y'].get('s').sum() == 0 and retries < 3:
             retries += 1
             image *= 1.5
             sample = poisson(datum=image, time=time, dt=dt)
