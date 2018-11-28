@@ -141,14 +141,18 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Neuron assignments and spike proportions.
     if train:
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = np.zeros([n_classes, n_neurons])
         logreg_model.intercept_ = np.zeros(n_classes)
         logreg_model.classes_ = np.arange(n_classes)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
         logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = logreg_coef
         logreg_model.intercept_ = logreg_intercept
         logreg_model.classes_ = np.arange(n_classes)
@@ -372,12 +376,12 @@ if __name__ == '__main__':
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--time', default=25, type=int, help='simulation time')
-    parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
+    parser.add_argument('--lr', type=float, default=5e-3, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.995, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
-    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
+    parser.add_argument('--update_interval', default=1000, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')

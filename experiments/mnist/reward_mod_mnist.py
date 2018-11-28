@@ -1,19 +1,26 @@
 import os
+
 import torch
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
+from gym import Space
 from time import time as t
+from typing import Tuple, Dict
 
-from bindsnet.datasets import MNIST
-from bindsnet.learning import NoOp, MSTDP
+from bindsnet.encoding import repeat
+from bindsnet.pipeline import Pipeline
+from bindsnet.learning import NoOp, MSTDPET
+from bindsnet.datasets import MNIST, Dataset
+from bindsnet.environment import Environment
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights
 from bindsnet.network.topology import Connection
 from bindsnet.network import load_network, Network
-from bindsnet.network.nodes import IFNodes, RealInput, DiehlAndCookNodes
-from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance
+from bindsnet.network.nodes import RealInput, DiehlAndCookNodes
+from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, plot_assignments, plot_performance, \
+    plot_voltages
 
 from experiments import ROOT_DIR
 
@@ -31,6 +38,163 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
+class MNISTEnvironment(Environment):
+    # language=rst
+    """
+    A wrapper around any object from the ``datasets`` module to pass to the ``Pipeline`` object.
+    """
+
+    def __init__(self, dataset: Dataset = MNIST, train: bool = True, time: int = 350, **kwargs):
+        # language=rst
+        """
+        Initializes the environment wrapper around the dataset.
+
+        :param dataset: Object from datasets module.
+        :param train: Whether to use train or test dataset.
+        :param time: Length of spike train per example.
+        :param kwargs: Raw data is multiplied by this value.
+        """
+        self.dataset = dataset
+        self.train = train
+        self.time = time
+
+        # Keyword arguments.
+        self.intensity = kwargs.get('intensity', 1)
+        self.max_prob = kwargs.get('max_prob', 1)
+
+        assert 0 < self.max_prob <= 1, 'Maximum spiking probability must be in (0, 1].'
+
+        self.obs = None
+
+        if train:
+            self.data, self.labels = self.dataset.get_train()
+        else:
+            self.data, self.labels = self.dataset.get_test()
+
+        self.data = iter(self.data)
+        self.labels = iter(self.labels)
+        self.datum = next(self.data)
+        self.label = next(self.labels)
+
+        self.obs = self.datum
+        self.preprocess()
+
+        self.action_space = Space(shape=(10,), dtype=int)
+        self.action_space.n = 10
+
+    def step(self, a: int = None) -> Tuple[torch.Tensor, int, bool, Dict[str, int]]:
+        # language=rst
+        """
+        Dummy function for OpenAI Gym environment's ``step()`` function.
+
+        :param a: Index of spiking neuron in output layer.
+        :return: Observation, reward (fixed to 0), done (fixed to False), and information dictionary.
+        """
+        # Info dictionary contains label of MNIST digit.
+        label = self.label.item()
+        info = {'label': label}
+
+        if a == label:
+            reward = 1
+        # elif a != label and a >= 0:
+        #     reward = 0
+        else:
+            reward = 0
+
+        return self.obs, reward, False, info
+
+    def reset(self) -> None:
+        # language=rst
+        """
+        Dummy function for OpenAI Gym environment's ``reset()`` function.
+        """
+        try:
+            # Attempt to fetch the next observation.
+            self.datum = next(self.data)
+            self.label = next(self.labels)
+        except StopIteration:
+            # If out of samples, reload data and label generators.
+            self.data = iter(self.data)
+            self.labels = iter(self.labels)
+            self.datum = next(self.data)
+            self.label = next(self.labels)
+
+        self.obs = self.datum
+        self.preprocess()
+
+        # import matplotlib.pyplot as plt
+        #
+        # plt.ioff()
+        # plt.matshow(self.obs.view(28, 28))
+        # plt.title(str(self.label))
+        # plt.show()
+
+    def render(self) -> None:
+        # language=rst
+        """
+        Dummy function for OpenAI Gym environment's ``render()`` function.
+        """
+        pass
+
+    def close(self) -> None:
+        # language=rst
+        """
+        Dummy function for OpenAI Gym environment's ``close()`` function.
+        """
+        pass
+
+    def preprocess(self) -> None:
+        # language=rst
+        """
+        Preprocessing step for a state specific to dataset objects.
+        """
+        self.obs = self.obs.view(-1)
+        self.obs /= self.obs.max()
+
+    def reshape(self) -> torch.Tensor:
+        # language=rst
+        """
+        Get reshaped observation for plotting purposes.
+
+        :return: Reshaped observation to plot in ``plt.imshow()`` call.
+        """
+        return self.obs.view(28, 28)
+
+
+def select_spiked(pipeline: Pipeline, **kwargs) -> int:
+    # language=rst
+    """
+    Selects an action probabilistically based on spiking activity from a network layer.
+
+    :param pipeline: Pipeline with environment that has an integer action space.
+    :return: Action sampled from multinomial over activity of similarly-sized output layer.
+
+    Keyword arguments:
+
+    :param str output: Name of output layer whose activity to base action selection on.
+    """
+    try:
+        output = kwargs['output']
+    except KeyError:
+        raise KeyError('select_spiked() requires an "output" layer argument.')
+
+    output = pipeline.network.layers[output]
+    action_space = pipeline.env.action_space
+
+    assert output.n == action_space.n, 'Output layer size not divisible by size of action space.'
+
+    spikes = output.s
+    _sum = spikes.sum().float()
+
+    # Choose action based on population's spiking.
+    if _sum == 0:
+        action = -1
+    else:
+        action = torch.argmax(spikes)
+
+    return action
+
+
 def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01, lr_decay=1, time=350, dt=1,
          theta_plus=0.05, theta_decay=1e-7, progress_interval=10, update_interval=250, plot=False,
          train=True, gpu=False):
@@ -40,11 +204,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
 
     params = [
         seed, n_neurons, n_train, inhib, lr_decay, time, dt,
-        theta_plus, theta_decay, progress_interval, update_interval
-    ]
-
-    test_params = [
-        seed, n_neurons, n_train, n_test, inhib, lr_decay, time, dt,
         theta_plus, theta_decay, progress_interval, update_interval
     ]
 
@@ -59,7 +218,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         torch.manual_seed(seed)
 
     n_examples = n_train if train else n_test
-    n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
     n_classes = 10
 
     # Build network.
@@ -70,31 +228,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         network.add_layer(input_layer, name='X')
 
         output_layer = DiehlAndCookNodes(
-            n=n_neurons, traces=True, rest=0, reset=1, thresh=1, refrac=0,
-            decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus, theta_decay=theta_decay
+            n=n_classes, rest=0, reset=1, thresh=1, decay=1e-2,
+            theta_plus=theta_plus, theta_decay=theta_decay, traces=True, trace_tc=5e-2
         )
         network.add_layer(output_layer, name='Y')
 
-        readout = IFNodes(n=n_classes, reset=0, thresh=1)
-        network.add_layer(readout, name='Z')
-
-        w = torch.rand(784, n_neurons)
+        w = torch.rand(784, n_classes)
         input_connection = Connection(
             source=input_layer, target=output_layer, w=w,
-            update_rule=MSTDP, nu=lr, wmin=0, wmax=1, norm=78.4
+            update_rule=MSTDPET, nu=lr, wmin=0, wmax=1,
+            norm=78.4, tc_e_trace=0.1
         )
         network.add_connection(input_connection, source='X', target='Y')
-
-        w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
-        recurrent_connection = Connection(
-            source=output_layer, target=output_layer, w=w, wmin=-inhib, wmax=0
-        )
-        network.add_connection(recurrent_connection, source='Y', target='Y')
-
-        readout_connection = Connection(
-            source=network.layers['Y'], target=readout, w=torch.rand(n_neurons, n_classes), norm=10
-        )
-        network.add_connection(readout_connection, source='Y', target='Z')
 
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
@@ -105,20 +250,24 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
         network.layers['Y'].theta_plus = 0
 
     # Load MNIST data.
-    dataset = MNIST(path=data_path, download=True)
+    environment = MNISTEnvironment(
+        dataset=MNIST(path=data_path, download=True), train=train, time=time
+    )
 
-    if train:
-        images, labels = dataset.get_train()
-    else:
-        images, labels = dataset.get_test()
-
-    images = images.view(-1, 784)
-    labels = labels.long()
+    # Create pipeline.
+    pipeline = Pipeline(
+        network=network, environment=environment, encoding=repeat,
+        action_function=select_spiked, output='Y', reward_delay=None
+    )
 
     spikes = {}
-    for layer in set(network.layers) - {'X'}:
-        spikes[layer] = Monitor(network.layers[layer], state_vars=['s'], time=time)
+    for layer in set(network.layers):
+        spikes[layer] = Monitor(network.layers[layer], state_vars=('s',), time=time)
         network.add_monitor(spikes[layer], name='%s_spikes' % layer)
+
+    network.add_monitor(Monitor(
+            network.connections['X', 'Y'].update_rule, state_vars=('e_trace',), time=time
+        ), 'X_Y_e_trace')
 
     # Train the network.
     if train:
@@ -126,16 +275,11 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
     else:
         print('\nBegin test.\n')
 
-    inpt_axes = None
-    inpt_ims = None
     spike_ims = None
     spike_axes = None
     weights_im = None
-    weights2_im = None
-    assigns_im = None
-    perf_ax = None
-
-    predictions = torch.zeros(update_interval).long()
+    elig_axes = None
+    elig_ims = None
 
     start = t()
     for i in range(n_examples):
@@ -146,52 +290,26 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=0.01,
             if i > 0 and train:
                 network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
 
-        # Get next input sample.
-        image = images[i % len(images)]
-
         # Run the network on the input.
         for j in range(time):
-            readout = network.layers['Z'].s
+            pipeline.step(a_plus=1, a_minus=0)
 
-            if readout[labels[i % len(labels)]]:
-                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=1, a_minus=0, a_plus=1)
-            else:
-                network.run(inpts={'X': image.unsqueeze(0)}, time=1, reward=0)
-
-        label = spikes['Z'].get('s').sum(1).argmax()
-        predictions[i % update_interval] = label.long()
-
-        if i > 0 and i % update_interval == 0:
-            if i % len(labels) == 0:
-                current_labels = labels[-update_interval:]
-            else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
-
-            accuracy = 100 * (predictions == current_labels).float().mean().item()
-            print(f'Accuracy over last {update_interval} examples: {accuracy}')
-
-        # Optionally plot various simulation information.
         if plot:
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
-            input_exc_weights = network.connections['X', 'Y'].w
-            square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-            exc_readout_weights = network.connections['Y', 'Z'].w
-
-            # _input = image.view(28, 28)
-            # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
-            # square_assignments = get_square_assignments(assignments, n_sqrt)
+            w = network.connections['X', 'Y'].w
+            square_weights = get_square_weights(w.view(784, n_classes), 4, 28)
 
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
-            weights2_im = plot_weights(exc_readout_weights, im=weights2_im)
-
-            # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
-            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            # perf_ax = plot_performance(curves, ax=perf_ax)
+            elig_ims, elig_axes = plot_voltages(
+                {'Y': network.monitors['X_Y_e_trace'].get('e_trace').view(-1, time)[1500:2000]},
+                plot_type='line', ims=elig_ims, axes=elig_axes
+            )
 
             plt.pause(1e-8)
 
-        network.reset_()  # Reset state variables.
+        pipeline.reset_()  # Reset state variables.
+        network.connections['X', 'Y'].update_rule.e_trace = torch.zeros(784, n_classes)
 
     print(f'Progress: {n_examples} / {n_examples} ({t() - start:.4f} seconds)')
 
@@ -213,7 +331,7 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=100.0, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
-    parser.add_argument('--time', default=350, type=int, help='simulation time')
+    parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
