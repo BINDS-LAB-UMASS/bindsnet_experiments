@@ -21,7 +21,7 @@ from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, pl
 
 from experiments import ROOT_DIR
 
-model = 'unclamp_dac'
+model = 'antihebb_dac'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -39,7 +39,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
          theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=100, plot=False,
          train=True, gpu=False, no_inhib=False, no_theta=False):
 
-    assert n_train % update_interval == 0, 'No. examples must be divisible by update_interval'
+    assert n_train % update_interval == 0 and n_test % update_interval == 0, \
+                            'No. examples must be divisible by update_interval'
 
     params = [
         seed, n_neurons, n_train, inhib, lr, lr_decay, time, dt, theta_plus,
@@ -64,7 +65,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     n_examples = n_train if train else n_test
     n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
     n_classes = 10
-    per_class = int(n_neurons / n_classes)
 
     # Build network.
     if train:
@@ -88,13 +88,20 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
 
         w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
         recurrent_connection = Connection(
-            source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
+            source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0,
+            update_rule=WeightDependentPostPre, nu=[0, -1], norm=inhib / 2 * n_neurons
         )
         network.add_connection(recurrent_connection, source='Y', target='Y')
+
+        mask = network.connections['Y', 'Y'].w == 0
+        masks = {('Y', 'Y'): mask}
 
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
+            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        )
+        network.connections['Y', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
         network.layers['Y'].theta_decay = 0
@@ -107,7 +114,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             network.layers['Y'].theta = 0
 
     # Load MNIST data.
-    dataset = MNIST(path=data_path, download=True, shuffle=True)
+    dataset = MNIST(path=data_path, download=True)
 
     if train:
         images, labels = dataset.get_train()
@@ -140,17 +147,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     voltage_ims = None
     voltage_axes = None
     weights_im = None
-
-    unclamps = {}
-    for label in range(n_classes):
-        unclamp = torch.ones(n_neurons).byte()
-        unclamp[label * per_class: (label + 1) * per_class] = 0
-        unclamps[label] = unclamp
+    weights2_im = None
 
     predictions = torch.zeros(n_examples)
     corrects = torch.zeros(n_examples)
-
-    spike_record = torch.zeros(n_examples, n_neurons)
 
     start = t()
     for i in range(n_examples):
@@ -170,7 +170,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
 
         # Run the network on the input.
         if train:
-            network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+            network.run(inpts=inpts, time=time, masks=masks)
         else:
             network.run(inpts=inpts, time=time)
 
@@ -183,20 +183,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
                 inpts = {'X': sample}
 
                 if train:
-                    network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
+                    network.run(inpts=inpts, time=time, masks=masks)
                 else:
                     network.run(inpts=inpts, time=time)
 
-        output = monitors['Y'].get('s')
-        summed_neurons = output.sum(dim=1).view(n_classes, per_class)
-        summed_classes = summed_neurons.sum(dim=1).long()
-        prediction = torch.argmax(summed_classes).item()
-        correct = prediction == label
-
-        predictions[i] = prediction
-        corrects[i] = int(correct)
-
-        spike_record[i] = output.float().sum(dim=1)
+        # output = monitors['Y'].get('s')
+        # summed_neurons = output.sum(dim=1).view(n_classes, per_class)
+        # summed_classes = summed_neurons.sum(dim=1)
+        # prediction = torch.argmax(summed_classes).item()
+        # correct = prediction == label
+        #
+        # predictions[i] = prediction
+        # corrects[i] = int(correct)
 
         # Optionally plot various simulation information.
         if plot:
@@ -207,12 +205,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             s = {layer: monitors[layer].get('s') for layer in monitors}
             input_exc_weights = network.connections['X', 'Y'].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
+            recurrent_weights = network.connections['Y', 'Y'].w
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             # voltage_ims, voltage_axes = plot_voltages(v, ims=voltage_ims, axes=voltage_axes)
 
             spike_ims, spike_axes = plot_spikes(s, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
+            weights2_im = plot_weights(recurrent_weights, im=weights2_im, wmin=-inhib, wmax=0)
 
             plt.pause(1e-8)
 
@@ -264,10 +264,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     # Compute confusion matrices and save them to disk.
     confusion = confusion_matrix(labels, predictions)
 
-    plt.ioff()
-    plt.matshow(confusion)
-    plt.show()
-
     to_write = ['train'] + params if train else ['test'] + test_params
     f = '_'.join([str(x) for x in to_write]) + '.pt'
     torch.save(confusion, os.path.join(confusion_path, f))
@@ -282,7 +278,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_neurons', type=int, default=100, help='no. of output layer neurons')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
+    parser.add_argument('--inhib', type=float, default=1, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=100, type=int, help='simulation time')

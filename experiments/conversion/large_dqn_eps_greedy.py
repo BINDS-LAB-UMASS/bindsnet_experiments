@@ -10,9 +10,11 @@ import torch
 import torch.nn as nn
 
 from bindsnet.conversion import ann_to_snn
-from bindsnet.environment import GymEnvironment
 from bindsnet.network.monitors import Monitor
 from bindsnet.analysis.plotting import plot_spikes, plot_input
+
+from experiments import ROOT_DIR
+from experiments.misc.atari_wrappers import make_atari, wrap_deepmind
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -20,27 +22,50 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join('..', '..', 'results', 'breakout', 'dqn_softmax')
-params_path = os.path.join('..', '..', 'params', 'breakout', 'dqn_softmax')
+results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'large_dqn_eps_greedy')
+params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'large_dqn_eps_greedy')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
         os.makedirs(p)
 
 
-class Network(nn.Module):
+class Net(nn.Module):
 
     def __init__(self):
-        super(Network, self).__init__()
+        super(Net, self).__init__()
+        # 1 input image channel, 6 output channels, 5x5 square convolution
+        # kernel
+        self.conv1 = nn.Conv2d(4, 32, 8, stride=4, padding=1)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2, padding=2)
+        self.relu2 = nn.ReLU()
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.relu3 = nn.ReLU()
 
-        self.fc1 = nn.Linear(6400, 1000)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(1000, 4)
+        # an affine operation: y = Wx + b
+        self.fc1 = nn.Linear(7744, 256)
+        self.relu4 = nn.ReLU()
+        self.fc2 = nn.Linear(256, 4)
 
     def forward(self, x):
-        x = self.relu(self.fc1(x))
+        # Max pooling over a (2, 2) window
+        x = self.relu1(self.conv1(x))
+
+        # If the size is a square you can only specify a single number
+        x = self.relu2(self.conv2(x))
+        x = self.relu3(self.conv3(x))
+        x = x.view(-1, 7744)
+        x = self.relu4(self.fc1(x))
         x = self.fc2(x)
         return x
+
+    def num_flat_features(self, x):
+        size = x.size()[1:]  # all dimensions except the batch dimension
+        num_features = 1
+        for s in size:
+            num_features *= s
+        return num_features
 
 
 def policy(q_values, eps):
@@ -50,7 +75,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False):
 
     np.random.seed(seed)
 
@@ -60,21 +85,20 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
     else:
         torch.manual_seed(seed)
 
-    epsilon = 0
-
     print()
     print('Loading the trained ANN...')
     print()
 
     # Create and train an ANN on the MNIST dataset.
-    ANN = Network()
+    ANN = Net()
     ANN.load_state_dict(
         torch.load(
-            '../../params/converted_dqn_time_difference_grayscale.pt'
+            '../../params/pytorch_breakout_dqn.pt'
         )
     )
 
-    environment = GymEnvironment('BreakoutDeterministic-v4')
+    environment = make_atari('BreakoutNoFrameskip-v4')
+    environment = wrap_deepmind(environment, frame_stack=True, scale=True)
 
     f = f'{seed}_{n_episodes}_states.pt'
     if os.path.isfile(os.path.join(params_path, f)):
@@ -86,42 +110,22 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
         print()
 
         episode_rewards = np.zeros(n_episodes)
-        noop_counter = 0
         total_t = 0
         states = []
 
         for i in range(n_episodes):
-            obs = environment.reset().to(device)
-            state = torch.stack([obs] * 4, dim=2)
+            state = torch.tensor(environment.reset()).to(device).unsqueeze(0).permute(0, 3, 1, 2)
 
             for t in itertools.count():
-                encoded = torch.tensor([0.25, 0.5, 0.75, 1]) * state
-                encoded = torch.sum(encoded, dim=2)
+                states.append(state)
 
-                states.append(encoded)
-
-                q_values = ANN(encoded.view([1, -1]))[0]
+                q_values = ANN(state)[0]
                 probs, best_action = policy(q_values, epsilon)
                 action = np.random.choice(np.arange(len(probs)), p=probs)
 
-                if action == 0:
-                    noop_counter += 1
-                else:
-                    noop_counter = 0
-
-                if noop_counter >= 20:
-                    action = np.random.choice([0, 1, 2, 3])
-                    noop_counter = 0
-
-                next_obs, reward, done, _ = environment.step(action)
-                next_obs = next_obs.to(device)
-
-                next_state = torch.clamp(next_obs - obs, min=0)
-                next_state = torch.cat(
-                    (state[:, :, 1:], next_state.view(
-                        [next_state.shape[0], next_state.shape[1], 1]
-                    )), dim=2
-                )
+                state, reward, done, _ = environment.step(action)
+                state = torch.tensor(state).unsqueeze(0).permute(0, 3, 1, 2)
+                state = state.to(device)
 
                 episode_rewards[i] += reward
                 total_t += 1
@@ -132,11 +136,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
                     break
 
-                state = next_state
-                obs = next_obs
-
-        states = torch.stack(states).view(-1, 6400)
-
+        states = torch.cat(states, dim=0)
         torch.save(states, os.path.join(params_path, f))
 
     print()
@@ -145,7 +145,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
     print('Converting ANN to SNN...')
 
     # Do ANN to SNN conversion.
-    SNN = ann_to_snn(ANN, input_shape=(6400,), data=states, percentile=percentile)
+    SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states, percentile=percentile)
 
     for l in SNN.layers:
         if l != 'Input':
@@ -169,24 +169,21 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
     # Test SNN on Atari Breakout.
     for i in range(n_snn_episodes):
-        obs = environment.reset().to(device)
-        state = torch.stack([obs] * 4, dim=2)
+        state = torch.tensor(environment.reset()).to(device).unsqueeze(0).permute(0, 3, 1, 2)
         prev_life = 5
 
         for t in itertools.count():
             sys.stdout.flush()
 
-            encoded_state = torch.tensor([0.25, 0.5, 0.75, 1]) * state
-            encoded_state = torch.sum(encoded_state, dim=2)
-            encoded_state = encoded_state.view([1, -1]).repeat(time, 1)
+            state = state.repeat(time, 1, 1, 1, 1)
 
-            inpts = {'Input': encoded_state}
+            inpts = {'Input': state}
             SNN.run(inpts=inpts, time=time)
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs = torch.softmax(voltages['3'].sum(1), 0)
-            action = torch.multinomial(probs, 1)
+            probs, best_action = policy(voltages['9'].sum(1), epsilon)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
 
             if action == 0:
                 noop_counter += 1
@@ -200,8 +197,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
             if new_life:
                 action = 1
 
-            next_obs, reward, done, info = environment.step(action)
-            next_obs = next_obs.to(device)
+            next_state, reward, done, info = environment.step(action)
+            next_state = torch.tensor(next_state).unsqueeze(0).permute(0, 3, 1, 2)
 
             if prev_life - info["ale.lives"] != 0:
                 new_life = True
@@ -210,11 +207,6 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
             prev_life = info["ale.lives"]
 
-            next_state = torch.clamp(next_obs - obs, min=0)
-            next_state = torch.cat(
-                (state[:, :, 1:], next_state.view([next_state.shape[0], next_state.shape[1], 1])), dim=2
-            )
-
             rewards[i] += reward
             total_t += 1
 
@@ -222,11 +214,11 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
             if plot:
                 # Get voltage recording.
-                inpt = encoded_state.view(time, 6400).sum(0).view(80, 80)
+                inpt = state.view(time, 4, 84, 84).sum(0).sum(0).view(84, 84)
                 spike_ims, spike_axes = plot_spikes(
                     {layer: spikes[layer] for layer in spikes}, ims=spike_ims, axes=spike_axes
                 )
-                inpt_axes, inpt_ims = plot_input(state, inpt, ims=inpt_ims, axes=inpt_axes)
+                inpt_axes, inpt_ims = plot_input(inpt, inpt, ims=inpt_ims, axes=inpt_axes)
                 plt.pause(1e-8)
 
             if done:
@@ -237,14 +229,13 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
                 break
 
             state = next_state
-            obs = next_obs
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile]])
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'avg. reward', 'std. reward'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'epsilon', 'avg. reward', 'std. reward'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, percentile, np.mean(rewards), np.std(rewards)
+        seed, time, n_episodes, n_snn_episodes, percentile, epsilon, np.mean(rewards), np.std(rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -260,14 +251,17 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, pl
 
     df.to_csv(path, index=True)
 
+    torch.save(rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--time', type=int, default=50)
+    parser.add_argument('--time', type=int, default=100)
     parser.add_argument('--n_episodes', type=int, default=100)
     parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
+    parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())

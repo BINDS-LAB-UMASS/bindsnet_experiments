@@ -97,8 +97,8 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     # Neuron assignments and spike proportions.
     if train:
         assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, 10))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
+        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
+        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
         ngram_scores = {}
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
@@ -173,10 +173,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
                     best_accuracy = max([x[-1] for x in curves.values()])
 
                 # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, 10, rates)
+                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
 
                 # Compute ngram scores.
-                ngram_scores = update_ngram_scores(spike_record, current_labels, 10, 2, ngram_scores)
+                ngram_scores = update_ngram_scores(spike_record, current_labels, n_classes, 2, ngram_scores)
 
             print()
 
@@ -189,7 +189,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         network.run(inpts=inpts, time=time)
 
         retries = 0
-        while spikes['Y'].get('s').sum() < 5 and retries < 3:
+        while spikes['Y'].get('s').sum() < 1 and retries < 3:
             retries += 1
             image *= 2
             sample = poisson(datum=image, time=time, dt=dt)
@@ -324,7 +324,7 @@ if __name__ == '__main__':
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
-    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')

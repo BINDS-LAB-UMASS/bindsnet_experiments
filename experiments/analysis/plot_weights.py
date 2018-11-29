@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from bindsnet.utils import get_square_weights
-from bindsnet.analysis.plotting import plot_weights, plot_locally_connected_weights
+from bindsnet.analysis.plotting import plot_weights, plot_locally_connected_weights, plot_conv2d_weights
 
 from experiments import ROOT_DIR
 from experiments.analysis import download_params
@@ -32,7 +32,8 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
             plot_weights(w)
 
         elif model in ['conv']:
-            raise NotImplementedError('Automated plotting not yet implemented for "conv" network model.')
+            w = network.connections['X', 'Y'].w
+            plot_conv2d_weights(w, wmax = network.connections['X', 'Y'].wmax)
 
         elif model in ['fully_conv', 'locally_connected', 'crop_locally_connected', 'bern_crop_locally_connected']:
             params = param_string.split('_')

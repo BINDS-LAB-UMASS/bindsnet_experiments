@@ -17,7 +17,7 @@ from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_weights, pl
 
 from experiments import ROOT_DIR
 
-model = 'diehl_and_cook_2015'
+model = 'supervisory_modulation'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')

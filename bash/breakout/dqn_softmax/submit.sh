@@ -4,7 +4,7 @@
 #SBATCH --time=01-00:00:00
 #SBATCH --mem=8000
 #SBATCH --account=rkozma
-#SBATCH --output=../../output/dqn_conversion_%j.out
+#SBATCH --output=../../output/dqn_softmax_%j.out
 #SBATCH --cpus-per-task=8
 
 seed=${1:-0}
@@ -18,7 +18,7 @@ source activate py36
 
 echo $seed $time $n_episodes $n_snn_episodes $percentile
 
-python dqn.py --seed $seed --time $time --n_episodes $n_episodes \
-              --n_snn_episodes $n_snn_episodes --percentile $percentile
+python dqn_softmax.py --seed $seed --time $time --n_episodes $n_episodes \
+                      --n_snn_episodes $n_snn_episodes --percentile $percentile
 
 exit

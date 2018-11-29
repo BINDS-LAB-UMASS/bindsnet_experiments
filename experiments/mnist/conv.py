@@ -9,11 +9,11 @@ from sklearn.metrics import confusion_matrix
 from sklearn.linear_model import LogisticRegression
 
 from bindsnet.datasets import MNIST
-from bindsnet.network import Network, load_network
-from bindsnet.learning import PostPre, NoOp
 from bindsnet.encoding import bernoulli
 from bindsnet.network.monitors import Monitor
+from bindsnet.network import Network, load_network
 from bindsnet.evaluation import assign_labels, logreg_fit
+from bindsnet.learning import WeightDependentPostPre, NoOp
 from bindsnet.network.topology import Connection, Conv2dConnection
 from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
@@ -64,7 +64,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         torch.manual_seed(seed)
 
     n_examples = n_train if train else n_test
-    input_shape = [28, 28]
+    input_shape = [20, 20]
 
     if kernel_size == input_shape:
         conv_size = [1, 1]
@@ -80,19 +80,19 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     # Build network.
     if train:
         network = Network()
-        input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
+        input_layer = Input(n=400, shape=(1, 1, 20, 20), traces=True)
         conv_layer = DiehlAndCookNodes(
             n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
-            traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+            traces=True, theta_plus=0.05 * (kernel_size[0] / 20), refrac=0
         )
         conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
         conv_conn = Conv2dConnection(
-            input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=PostPre,
-            norm=0.5 * int(np.sqrt(total_kernel_size)), nu=[0, lr], wmax=2.0
+            input_layer, conv_layer, kernel_size=kernel_size, stride=stride, update_rule=WeightDependentPostPre,
+            norm=0.05 * total_kernel_size, nu=[0, lr], wmin=0, wmax=0.25
         )
         conv_conn2 = Conv2dConnection(
             input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
-            stride=stride, update_rule=None, nu=[0, 0], wmax=2.0
+            stride=stride, update_rule=None, wmax=0.25
         )
 
         w = -inhib * torch.ones(
@@ -133,29 +133,32 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         images, labels = dataset.get_test()
 
     images *= intensity
+    images = images[:, 4:-4, 4:-4].contiguous()
 
     # Record spikes during the simulation.
     spike_record = torch.zeros(update_interval, time, n_neurons)
+    full_spike_record = torch.zeros(n_examples, n_neurons)
 
     # Neuron assignments and spike proportions.
     if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = np.zeros([n_classes, n_neurons])
         logreg_model.intercept_ = np.zeros(n_classes)
         logreg_model.classes_ = np.arange(n_classes)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = logreg_coef
         logreg_model.intercept_ = logreg_intercept
         logreg_model.classes_ = np.arange(n_classes)
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'logreg': []}
+    curves = {'logreg': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -192,13 +195,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
+                current_record = full_spike_record[-update_interval:]
             else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
+                current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
+                current_record = full_spike_record[i % len(labels) - update_interval:i % len(labels)]
 
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
-                curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, logreg=logreg_model
+                curves, current_labels, n_classes, full_spike_record=current_record, logreg=logreg_model
             )
             print_results(curves)
 
@@ -218,53 +222,45 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
                     torch.save(
-                        (
-                            assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
-                        ), open(path, 'wb')
+                        (logreg_model.coef_, logreg_model.intercept_), open(path, 'wb')
                     )
                     best_accuracy = max([x[-1] for x in curves.values()])
 
-                # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
-
                 # Refit logistic regression model.
-                logreg_model = logreg_fit(spike_record, current_labels, logreg_model)
+                logreg_model = logreg_fit(full_spike_record[:i], labels[:i], logreg_model)
 
             print()
 
         # Get next input sample.
         image = images[i % len(images)]
-        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5).unsqueeze(1).unsqueeze(1)
+        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=1).unsqueeze(1).unsqueeze(1)
         inpts = {'X': sample}
 
         # Run the network on the input.
         network.run(inpts=inpts, time=time)
 
-        retries = 0
-        while spikes['Y_'].get('s').sum() < 5 and retries < 3:
-            retries += 1
-            sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
-            inpts = {'X': sample}
-            network.run(inpts=inpts, time=time)
+        network.connections['X', 'Y_'].w = network.connections['X', 'Y'].w
 
         # Add to spikes recording.
         spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+        full_spike_record[i] = spikes['Y_'].get('s').view(time, -1).sum(0)
 
         # Optionally plot various simulation information.
         if plot:
-            _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
+            _input = inpts['X'].view(time, 400).sum(0).view(20, 20)
             w = network.connections['X', 'Y'].w
+
             _spikes = {
-                'X': spikes['X'].get('s').view(28 ** 2, time),
+                'X': spikes['X'].get('s').view(400, time),
                 'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
                 'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
             }
 
             inpt_axes, inpt_ims = plot_input(
-                image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
+                image.view(20, 20), _input, label=labels[i % len(labels)], ims=inpt_ims, axes=inpt_axes
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_conv2d_weights(w, im=weights_im, wmax=0.2)
+            weights_im = plot_conv2d_weights(w, im=weights_im, wmax=network.connections['X', 'Y'].wmax)
 
             plt.pause(1e-8)
 
@@ -276,13 +272,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     if i % len(labels) == 0:
         current_labels = labels[-update_interval:]
+        current_record = full_spike_record[-update_interval:]
     else:
-        current_labels = labels[i % len(images) - update_interval:i % len(images)]
+        current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
+        current_record = full_spike_record[i % len(labels) - update_interval:i % len(labels)]
 
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
-        curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, logreg=logreg_model
+        curves, current_labels, n_classes, full_spike_record=current_record, logreg=logreg_model
     )
     print_results(curves)
 
@@ -297,9 +294,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save(
-                (
-                    assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
-                ), open(path, 'wb')
+                (logreg_model.coef_, logreg_model.intercept_), open(path, 'wb')
             )
 
     if train:
@@ -319,8 +314,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['logreg']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['logreg'])
+        np.mean(curves['logreg']), np.std(curves['logreg'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -332,9 +326,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             if train:
                 columns = [
                     'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
-                    'max_logreg'
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_logreg', 'std_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -342,9 +334,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             else:
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
-                    'max_logreg'
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_logreg', 'std_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -385,13 +375,13 @@ if __name__ == '__main__':
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
-    parser.add_argument('--time', default=100, type=int, help='simulation time')
-    parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
+    parser.add_argument('--time', default=25, type=int, help='simulation time')
+    parser.add_argument('--lr', type=float, default=5e-3, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.995, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
-    parser.add_argument('--intensity', type=float, default=5, help='constant to multiple input data by')
+    parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
-    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
+    parser.add_argument('--update_interval', default=1000, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')

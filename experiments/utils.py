@@ -36,27 +36,29 @@ def update_curves(curves: Dict[str, list], labels: torch.Tensor,
     """
     predictions = {}
     for scheme in curves:
-        spike_record = kwargs['spike_record']
-
         # Branch based on name of classification scheme
         if scheme == 'all':
+            spike_record = kwargs['spike_record']
             assignments = kwargs['assignments']
 
             prediction = all_activity(spike_record, assignments, n_classes)
         elif scheme == 'proportion':
+            spike_record = kwargs['spike_record']
             assignments = kwargs['assignments']
             proportions = kwargs['proportions']
 
             prediction = proportion_weighting(spike_record, assignments, proportions, n_classes)
         elif scheme == 'ngram':
+            spike_record = kwargs['spike_record']
             ngram_scores = kwargs['ngram_scores']
             n = kwargs['n']
 
             prediction = ngram(spike_record, ngram_scores, n_classes, n)
         elif scheme == 'logreg':
+            full_spike_record = kwargs['full_spike_record']
             logreg = kwargs['logreg']
 
-            prediction = logreg_predict(spikes=spike_record, logreg=logreg)
+            prediction = logreg_predict(spikes=full_spike_record, logreg=logreg)
 
         else:
             raise NotImplementedError
