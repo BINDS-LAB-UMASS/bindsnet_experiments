@@ -3,6 +3,8 @@ params/
 data/
 curves/
 confusion/
+rand/
+spikes/
 
 bash/output/
 

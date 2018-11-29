@@ -20,7 +20,7 @@ from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spik
 
 from experiments import ROOT_DIR
 
-model = 'unclamp_lcsnn'
+model = 'fixed_unclamp_lcsnn'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -68,50 +68,39 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     # Build network.
     if train:
-        network = Network()
-
-        conv_size = (
-            int((side_length - kernel_size) / stride) + 1,
-            int((side_length - kernel_size) / stride) + 1
+        network = load_network(
+            os.path.join(
+                ROOT_DIR, 'params', 'mnist', 'crop_locally_connected',
+                '0_12_4_150_4_0.01_0.99_60000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250.pt'
+            )
         )
 
-        input_layer = Input(n=n_inpt, traces=True, trace_tc=5e-2)
+        for l in network.layers:
+            network.layers[l].dt = 1
+            network.layers[l].lbound = None
+
+        for m in network.monitors:
+            network.monitors[m].record_length = 0
+
+        network.connections['X', 'Y'].update_rule = NoOp(
+            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
+        )
+
+        network.layers['Y'].theta_decay = 0
+        network.layers['Y'].theta_plus = 0
+        network.layers['Y'].theta -= 0.5 * network.layers['Y'].theta.mean()
+        network.layers['Y'].one_spike = False
+
+        del network.connections['Y', 'Y']
 
         output_layer = DiehlAndCookNodes(
-            n=n_filters * conv_size[0] * conv_size[1], traces=True, rest=0, reset=0,
-            thresh=1, refrac=0, decay=1e-2, trace_tc=5e-2, theta_plus=theta_plus,
-            theta_decay=theta_decay
-        )
-        input_output_conn = LocallyConnectedConnection(
-            input_layer, output_layer, kernel_size=kernel_size, stride=stride, n_filters=n_filters,
-            nu=[0, lr], update_rule=WeightDependentPostPre, wmin=0, wmax=1,
-            norm=norm, input_shape=(side_length, side_length)
-        )
-
-        w = torch.zeros(n_filters, *conv_size, n_filters, *conv_size)
-        for fltr1 in range(n_filters):
-            for fltr2 in range(n_filters):
-                if fltr1 != fltr2:
-                    for i in range(conv_size[0]):
-                        for j in range(conv_size[1]):
-                            w[fltr1, i, j, fltr2, i, j] = -inhib
-
-        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
-        recurrent_conn = Connection(output_layer, output_layer, w=w)
-
-        network.add_layer(input_layer, name='X')
-        network.add_layer(output_layer, name='Y')
-        network.add_connection(input_output_conn, source='X', target='Y')
-        network.add_connection(recurrent_conn, source='Y', target='Y')
-
-        output_layer = LIFNodes(
             n=n_output, traces=True, rest=0, reset=0, thresh=1, refrac=0, decay=1e-2, trace_tc=5e-2
         )
 
         hidden_output_connection = Connection(
-            network.layers['Y'], output_layer, nu=[0, 5 * lr],
+            network.layers['Y'], output_layer, nu=[0, lr],
             update_rule=WeightDependentPostPre, wmin=0,
-            wmax=1, norm=norm * n_output
+            wmax=1, norm=norm * network.layers['Y'].n
         )
 
         w = -inhib * (torch.ones(n_output, n_output) - torch.diag(torch.ones(n_output)))
@@ -124,16 +113,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         network.add_connection(output_recurrent_connection, source='Z', target='Z')
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
-
-        network.connections['X', 'Y'].update_rule = NoOp(
-            connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
-        )
-
-        network.layers['Y'].theta = 0
-        network.layers['Y'].theta_decay = 0
-        network.layers['Y'].theta_plus = 0
-
-        # del network.connections['Y', 'Y']
 
         network.connections['Y', 'Z'].update_rule = NoOp(
             connection=network.connections['Y', 'Z'], nu=0
@@ -236,6 +215,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         predictions[i] = prediction
         corrects[i] = int(correct)
 
+        # print(spikes[].get('s').sum(), spikes['Z'].get('s').sum())
+
         # Optionally plot various simulation information.
         if plot:
             _spikes = {
@@ -250,11 +231,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                 conv_size, locations, side_length, im=weights_im
             )
 
-            n_sqrt = int(np.ceil(np.sqrt(n_output)))
-            side = int(np.ceil(np.sqrt(network.layers['Y'].n)))
             w = network.connections['Y', 'Z'].w
-            w = get_square_weights(w, n_sqrt=n_sqrt, side=side)
-
             weights2_im = plot_weights(
                 w, im=weights2_im, wmax=1
             )
@@ -322,14 +299,14 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--n_train', type=int, default=60000, help='no. of training samples')
     parser.add_argument('--n_test', type=int, default=10000, help='no. of test samples')
-    parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
-    parser.add_argument('--kernel_size', type=int, nargs='+', default=[8], help='one or two kernel side lengths')
+    parser.add_argument('--inhib', type=float, default=250.0, help='inhibition connection strength')
+    parser.add_argument('--kernel_size', type=int, nargs='+', default=[12], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[4], help='one or two horizontal stride lengths')
-    parser.add_argument('--n_filters', type=int, default=25, help='no. of locally connected filters')
+    parser.add_argument('--n_filters', type=int, default=150, help='no. of locally connected filters')
     parser.add_argument('--n_output', type=int, default=100, help='no. of output neurons')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
-    parser.add_argument('--lr', type=float, default=0.025, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')

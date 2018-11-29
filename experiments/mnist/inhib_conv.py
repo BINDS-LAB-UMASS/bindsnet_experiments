@@ -12,19 +12,19 @@ from sklearn.linear_model import LogisticRegression
 
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import bernoulli
-from bindsnet.utils import im2col_indices
 from bindsnet.network.monitors import Monitor
 from bindsnet.network import Network, load_network
-from bindsnet.learning import PostPre, NoOp, LearningRule
 from bindsnet.evaluation import assign_labels, logreg_fit
-from bindsnet.network.nodes import Input, AdaptiveLIFNodes
+from bindsnet.learning import NoOp, LearningRule
+from bindsnet.network.topology import Connection, Conv2dConnection, LocallyConnectedConnection, AbstractConnection
+from bindsnet.network.nodes import Input, DiehlAndCookNodes, LIFNodes
 from bindsnet.analysis.plotting import plot_input, plot_spikes, plot_conv2d_weights
-from bindsnet.network.topology import Connection, Conv2dConnection, AbstractConnection, LocallyConnectedConnection
+from bindsnet.utils import im2col_indices
 
 from experiments import ROOT_DIR
 from experiments.utils import print_results, update_curves
 
-model = 'conv'
+model = 'inhib_conv'
 data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
@@ -38,23 +38,33 @@ for path in [params_path, curves_path, results_path, confusion_path]:
         os.makedirs(path)
 
 
-class WeightDependentPostPositive(LearningRule):
+class WeightDependentPostPre(LearningRule):
+    # language=rst
+    """
+    STDP rule involving both pre- and post-synaptic spiking activity. The post-synaptic update is positive and the pre-
+    synaptic update is negative, and both are dependent on the magnitude of the synaptic weights.
+    """
 
     def __init__(self, connection: AbstractConnection, nu: Optional[Union[float, Sequence[float]]] = None,
-                 weight_decay: float = 0.0) -> None:
+                 weight_decay: float = 0.0, **kwargs) -> None:
         # language=rst
         """
-        Constructor for ``PostPre`` learning rule.
+        Constructor for ``WeightDependentPostPre`` learning rule.
 
-        :param connection: An ``AbstractConnection`` object whose weights the ``PostPre`` learning rule will modify.
+        :param connection: An ``AbstractConnection`` object whose weights the ``WeightDependentPostPre`` learning rule will
+                           modify.
         :param nu: Single or pair of learning rates for pre- and post-synaptic events, respectively.
         :param weight_decay: Constant multiple to decay weights by on each iteration.
         """
         super().__init__(
-            connection=connection, nu=nu, weight_decay=weight_decay
+            connection=connection, nu=nu, weight_decay=weight_decay, **kwargs
         )
 
-        assert self.source.traces and self.target.traces, 'Both pre- and post-synaptic nodes must record spike traces.'
+        assert self.source.traces, 'Pre-synaptic nodes must record spike traces.'
+        assert connection.wmin is not None and connection.wmax is not None, 'Connection must define wmin and wmax.'
+
+        self.wmin = connection.wmin
+        self.wmax = connection.wmax
 
         if isinstance(connection, (Connection, LocallyConnectedConnection)):
             self.update = self._connection_update
@@ -65,9 +75,6 @@ class WeightDependentPostPositive(LearningRule):
                 'This learning rule is not supported for this Connection type.'
             )
 
-        self.wmin = self.connection.wmin
-        self.wmax = self.connection.wmax
-
     def _connection_update(self, **kwargs) -> None:
         # language=rst
         """
@@ -75,17 +82,22 @@ class WeightDependentPostPositive(LearningRule):
         """
         super().update()
 
+        source_s = self.source.s.view(-1).float()
         source_x = self.source.x.view(-1)
         target_s = self.target.s.view(-1).float()
+        target_x = self.target.x.view(-1)
 
-        shape = self.connection.w.shape
-        self.connection.w = self.connection.w.view(self.source.n, self.target.n)
+        update = 0
+
+        # Pre-synaptic update.
+        if self.nu[0]:
+            update -= self.nu[0] * torch.ger(source_s, target_x) * (self.connection.w - self.wmin)
 
         # Post-synaptic update.
-        self.connection.w += self.nu[1] * torch.ger(source_x - 0.2, target_s) * \
-                 (self.wmax - self.connection.w) * (self.connection.w - self.wmin)
+        if self.nu[1]:
+            update += self.nu[1] * torch.ger(source_x, target_s) * (self.wmax - self.connection.w)
 
-        self.connection.w = self.connection.w.view(*shape)
+        self.connection.w += update
 
     def _conv2d_connection_update(self, **kwargs) -> None:
         # language=rst
@@ -95,19 +107,32 @@ class WeightDependentPostPositive(LearningRule):
         super().update()
 
         # Get convolutional layer parameters.
-        out_channels, _, kernel_height, kernel_width = self.connection.w.size()
+        out_channels, in_channels, kernel_height, kernel_width = self.connection.w.size()
         padding, stride = self.connection.padding, self.connection.stride
 
         # Reshaping spike traces and spike occurrences.
         x_source = im2col_indices(
             self.source.x, kernel_height, kernel_width, padding=padding, stride=stride
         )
-        s_target = self.target.s.permute(1, 2, 3, 0).reshape(out_channels, -1).float()
+        x_target = self.target.x.permute(1, 2, 3, 0).view(out_channels, -1)
+        s_source = im2col_indices(
+            self.source.s.float(), kernel_height, kernel_width, padding=padding, stride=stride
+        )
+        s_target = self.target.s.permute(1, 2, 3, 0).view(out_channels, -1).float()
+
+        update = 0
+
+        # Pre-synaptic update.
+        if self.nu[0] and s_source.byte().any():
+            pre = x_target @ s_source.t() / s_source.sum()
+            update -= self.nu[0] * pre.view(self.connection.w.size()) * (self.connection.w - self.wmin)
 
         # Post-synaptic update.
-        post = s_target @ (x_source.t() - 0.2)
-        self.connection.w += self.nu[1] * post.view(self.connection.w.size()) * \
-                             (self.wmax - self.connection.w) * (self.connection.w - self.wmin)
+        if self.nu[1] and s_target.byte().any():
+            post = s_target @ x_source.t() / s_target.sum()
+            update += self.nu[1] * post.view(self.connection.w.size()) * (self.wmax - self.connection.w)
+
+        self.connection.w += update
 
 
 def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_filters=25, padding=0, inhib=100,
@@ -139,7 +164,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         torch.manual_seed(seed)
 
     n_examples = n_train if train else n_test
-    input_shape = [28, 28]
+    input_shape = [20, 20]
 
     if kernel_size == input_shape:
         conv_size = [1, 1]
@@ -155,21 +180,39 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     # Build network.
     if train:
         network = Network()
-        input_layer = Input(n=784, shape=(1, 1, 28, 28), traces=True)
-        conv_layer = AdaptiveLIFNodes(
-            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), reset=0,
-            rest=0, thresh=1, traces=True, theta_plus=0.05 * (kernel_size[0] / 28), refrac=0
+        input_layer = Input(n=400, shape=(1, 1, 20, 20), traces=True)
+        conv_layer = DiehlAndCookNodes(
+            n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), thresh=-64.0,
+            traces=True, theta_plus=0.05 * (kernel_size[0] / 20), refrac=0
         )
-        w = torch.randn(n_filters, 1, *kernel_size)
+        conv_layer2 = LIFNodes(n=n_filters * total_conv_size, shape=(1, n_filters, *conv_size), refrac=0)
         conv_conn = Conv2dConnection(
-            input_layer, conv_layer, w=torch.clamp(w, -1, 1),
-            kernel_size=kernel_size, stride=stride, update_rule=WeightDependentPostPositive,
-            nu=[0, lr], wmin=-1.0, wmax=1.0
+            input_layer, conv_layer, kernel_size=kernel_size, stride=stride,
+            update_rule=WeightDependentPostPre, norm=0.05 * total_kernel_size,
+            nu=[0, lr], wmin=0, wmax=0.25
         )
+        conv_conn2 = Conv2dConnection(
+            input_layer, conv_layer2, w=conv_conn.w, kernel_size=kernel_size,
+            stride=stride, update_rule=None, wmax=0.25
+        )
+
+        w = -inhib * torch.ones(
+            n_filters, conv_size[0], conv_size[1], n_filters, conv_size[0], conv_size[1]
+        )
+        for f in range(n_filters):
+            for f2 in range(n_filters):
+                if f != f2:
+                    w[f, :, : f2, :, :] = 0
+
+        w = w.view(n_filters * conv_size[0] * conv_size[1], n_filters * conv_size[0] * conv_size[1])
+        recurrent_conn = Connection(conv_layer, conv_layer, w=w)
 
         network.add_layer(input_layer, name='X')
         network.add_layer(conv_layer, name='Y')
+        network.add_layer(conv_layer2, name='Y_')
         network.add_connection(conv_conn, source='X', target='Y')
+        network.add_connection(conv_conn2, source='X', target='Y_')
+        network.add_connection(recurrent_conn, source='Y', target='Y')
 
         # Voltage recording for excitatory and inhibitory layers.
         voltage_monitor = Monitor(network.layers['Y'], ['v'], time=time)
@@ -191,29 +234,32 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
         images, labels = dataset.get_test()
 
     images *= intensity
+    images = images[:, 4:-4, 4:-4].contiguous()
 
     # Record spikes during the simulation.
     spike_record = torch.zeros(update_interval, time, n_neurons)
+    full_spike_record = torch.zeros(n_examples, n_neurons)
 
     # Neuron assignments and spike proportions.
     if train:
-        assignments = -torch.ones_like(torch.Tensor(n_neurons))
-        proportions = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_classes))
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = np.zeros([n_classes, n_neurons])
         logreg_model.intercept_ = np.zeros(n_classes)
         logreg_model.classes_ = np.arange(n_classes)
     else:
         path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
-        assignments, proportions, rates, logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
-        logreg_model = LogisticRegression(warm_start=True, n_jobs=-1, solver='lbfgs')
+        logreg_coef, logreg_intercept = torch.load(open(path, 'rb'))
+        logreg_model = LogisticRegression(
+            warm_start=True, n_jobs=-1, solver='lbfgs', max_iter=1000, multi_class='multinomial'
+        )
         logreg_model.coef_ = logreg_coef
         logreg_model.intercept_ = logreg_intercept
         logreg_model.classes_ = np.arange(n_classes)
 
     # Sequence of accuracy estimates.
-    curves = {'all': [], 'proportion': [], 'logreg': []}
+    curves = {'logreg': []}
     predictions = {
         scheme: torch.Tensor().long() for scheme in curves.keys()
     }
@@ -238,6 +284,8 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
     spike_axes = None
     weights_im = None
 
+    plot_update_interval = 100
+
     start = t()
     for i in range(n_examples):
         if i % progress_interval == 0:
@@ -250,13 +298,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
+                current_record = full_spike_record[-update_interval:]
             else:
-                current_labels = labels[i % len(images) - update_interval:i % len(images)]
+                current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
+                current_record = full_spike_record[i % len(labels) - update_interval:i % len(labels)]
 
             # Update and print accuracy evaluations.
             curves, preds = update_curves(
-                curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-                proportions=proportions, logreg=logreg_model
+                curves, current_labels, n_classes, full_spike_record=current_record, logreg=logreg_model
             )
             print_results(curves)
 
@@ -276,54 +325,47 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
                     torch.save(
-                        (
-                            assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
-                        ), open(path, 'wb')
+                        (logreg_model.coef_, logreg_model.intercept_), open(path, 'wb')
                     )
                     best_accuracy = max([x[-1] for x in curves.values()])
 
-                # Assign labels to excitatory layer neurons.
-                assignments, proportions, rates = assign_labels(spike_record, current_labels, n_classes, rates)
-
                 # Refit logistic regression model.
-                logreg_model = logreg_fit(spike_record, current_labels, logreg_model)
+                logreg_model = logreg_fit(full_spike_record[:i], labels[:i], logreg_model)
 
             print()
 
         # Get next input sample.
         image = images[i % len(images)]
-        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5).unsqueeze(1).unsqueeze(1)
+        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=1).unsqueeze(1).unsqueeze(1)
         inpts = {'X': sample}
 
         # Run the network on the input.
         network.run(inpts=inpts, time=time)
 
-        retries = 0
-        while spikes['Y'].get('s').sum() < 5 and retries < 3:
-            retries += 1
-            sample = bernoulli(datum=image, time=time, dt=dt, max_prob=0.5 + retries * 0.15).unsqueeze(1).unsqueeze(1)
-            inpts = {'X': sample}
-            network.run(inpts=inpts, time=time)
+        network.connections['X', 'Y_'].w = network.connections['X', 'Y'].w
 
         # Add to spikes recording.
-        spike_record[i % update_interval] = spikes['Y'].get('s').view(time, -1)
+        spike_record[i % update_interval] = spikes['Y_'].get('s').view(time, -1)
+        full_spike_record[i] = spikes['Y_'].get('s').view(time, -1).sum(0)
 
         # Optionally plot various simulation information.
-        if plot:
-            _input = inpts['X'].view(time, 784).sum(0).view(28, 28)
+        if plot and i % plot_update_interval == 0:
+            _input = inpts['X'].view(time, 400).sum(0).view(20, 20)
             w = network.connections['X', 'Y'].w
+
             _spikes = {
-                'X': spikes['X'].get('s').view(28 ** 2, time),
-                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time)
+                'X': spikes['X'].get('s').view(400, time),
+                'Y': spikes['Y'].get('s').view(n_filters * total_conv_size, time),
+                'Y_': spikes['Y_'].get('s').view(n_filters * total_conv_size, time)
             }
 
             inpt_axes, inpt_ims = plot_input(
-                image.view(28, 28), _input, label=labels[i], ims=inpt_ims, axes=inpt_axes
+                image.view(20, 20), _input, label=labels[i % len(labels)], ims=inpt_ims, axes=inpt_axes
             )
             spike_ims, spike_axes = plot_spikes(spikes=_spikes, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_conv2d_weights(w, im=weights_im, wmin=-1, wmax=1)
+            weights_im = plot_conv2d_weights(w, im=weights_im, wmax=network.connections['X', 'Y'].wmax)
 
-            plt.pause(1e-8)
+            plt.pause(1e-2)
 
         network.reset_()  # Reset state variables.
 
@@ -333,13 +375,14 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     if i % len(labels) == 0:
         current_labels = labels[-update_interval:]
+        current_record = full_spike_record[-update_interval:]
     else:
-        current_labels = labels[i % len(images) - update_interval:i % len(images)]
+        current_labels = labels[i % len(labels) - update_interval:i % len(labels)]
+        current_record = full_spike_record[i % len(labels) - update_interval:i % len(labels)]
 
     # Update and print accuracy evaluations.
     curves, preds = update_curves(
-        curves, current_labels, n_classes, spike_record=spike_record, assignments=assignments,
-        proportions=proportions, logreg=logreg_model
+        curves, current_labels, n_classes, full_spike_record=current_record, logreg=logreg_model
     )
     print_results(curves)
 
@@ -354,9 +397,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             network.save(os.path.join(params_path, model_name + '.pt'))
             path = os.path.join(params_path, '_'.join(['auxiliary', model_name]) + '.pt')
             torch.save(
-                (
-                    assignments, proportions, rates, logreg_model.coef_, logreg_model.intercept_
-                ), open(path, 'wb')
+                (logreg_model.coef_, logreg_model.intercept_), open(path, 'wb')
             )
 
     if train:
@@ -376,8 +417,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
 
     # Save results to disk.
     results = [
-        np.mean(curves['all']), np.mean(curves['proportion']), np.mean(curves['logreg']),
-        np.max(curves['all']), np.max(curves['proportion']), np.max(curves['logreg'])
+        np.mean(curves['logreg']), np.std(curves['logreg'])
     ]
 
     to_write = params + results if train else test_params + results
@@ -389,9 +429,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             if train:
                 columns = [
                     'seed', 'n_train', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
-                    'max_logreg'
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_logreg', 'std_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -399,9 +437,7 @@ def main(seed=0, n_train=60000, n_test=10000, kernel_size=(16,), stride=(4,), n_
             else:
                 columns = [
                     'seed', 'n_train', 'n_test', 'kernel_size', 'stride', 'n_filters', 'padding', 'inhib', 'time',
-                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_all_activity',
-                    'mean_proportion_weighting', 'mean_logreg', 'max_all_activity', 'max_proportion_weighting',
-                    'max_logreg'
+                    'lr', 'lr_decay', 'dt', 'intensity', 'update_interval', 'mean_logreg', 'std_logreg'
                 ]
 
                 header = ','.join(columns) + '\n'
@@ -442,13 +478,13 @@ if __name__ == '__main__':
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--padding', type=int, default=0, help='horizontal, vertical padding size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
-    parser.add_argument('--time', default=100, type=int, help='simulation time')
+    parser.add_argument('--time', default=25, type=int, help='simulation time')
     parser.add_argument('--lr', type=float, default=1e-3, help='post-synaptic learning rate')
-    parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
+    parser.add_argument('--lr_decay', type=float, default=0.995, help='rate at which to decay learning rate')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integreation timestep')
     parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
-    parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
+    parser.add_argument('--update_interval', default=1000, type=int, help='no. examples between evaluation')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='test phase')
