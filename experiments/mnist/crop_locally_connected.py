@@ -208,7 +208,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
         # Add to spikes recording.
         spike_record[i % update_interval] = spikes['Y'].get('s').t()
-        full_spike_record[i] = spikes['Y'].get('s').t().sum(1).long()
+        full_spike_record[i] = spikes['Y'].get('s').t().sum(0).long()
 
         # Optionally plot various simulation information.
         if plot:
