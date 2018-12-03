@@ -232,10 +232,10 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
     model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, occlusion]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'occlusion', 'avg. reward', 'rewards'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'occlusion', 'avg. reward', 'std. rewards'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, percentile, occlusion, np.mean(rewards), rewards
+        seed, time, n_episodes, n_snn_episodes, percentile, occlusion, np.mean(rewards), np.std(rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -250,6 +250,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             df.loc[model_name] = data[0]
 
     df.to_csv(path, index=True)
+
+    torch.save(rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
 
 
 if __name__ == '__main__':
