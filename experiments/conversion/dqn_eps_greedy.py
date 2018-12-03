@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 
+from time import time as t_
+
 from bindsnet.conversion import ann_to_snn
 from bindsnet.environment import GymEnvironment
 from bindsnet.network.monitors import Monitor
@@ -173,7 +175,11 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
         state = torch.stack([obs] * 4, dim=2)
         prev_life = 5
 
+        start = t_()
         for t in itertools.count():
+            print(f'Timestep {t} (elapsed {t_() - start:.2f})')
+            start = t_()
+
             sys.stdout.flush()
 
             encoded_state = torch.tensor([0.25, 0.5, 0.75, 1]) * state

@@ -6,15 +6,18 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from time import time as t_
+
 import torch
 import torch.nn as nn
 
-from bindsnet.conversion import ann_to_snn
 from bindsnet.network.monitors import Monitor
-from bindsnet.analysis.plotting import plot_spikes, plot_input
+from bindsnet.conversion import Permute, ann_to_snn
+from bindsnet.analysis.plotting import plot_spikes, plot_input, plot_voltages
 
 from experiments import ROOT_DIR
 from experiments.misc.atari_wrappers import make_atari, wrap_deepmind
+
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -34,28 +37,29 @@ class Net(nn.Module):
 
     def __init__(self):
         super(Net, self).__init__()
-        # 1 input image channel, 6 output channels, 5x5 square convolution
-        # kernel
-        self.conv1 = nn.Conv2d(4, 32, 8, stride=4, padding=1)
-        self.relu1 = nn.ReLU()
-        self.conv2 = nn.Conv2d(32, 64, 4, stride=2, padding=2)
-        self.relu2 = nn.ReLU()
-        self.conv3 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
-        self.relu3 = nn.ReLU()
 
-        # an affine operation: y = Wx + b
+        self.conv1 = nn.Conv2d(4, 32, 8, stride=4, padding=2)
+        self.relu1 = nn.ReLU()
+        self.pad2 = nn.ConstantPad2d((1, 2, 1, 2), value=0)
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2, padding=0)
+        self.relu2 = nn.ReLU()
+        self.pad3 = nn.ConstantPad2d((1, 1, 1, 1), value=0)
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1, padding=0)
+        self.relu3 = nn.ReLU()
+        self.perm = Permute((0, 2, 3, 1))
         self.fc1 = nn.Linear(7744, 256)
         self.relu4 = nn.ReLU()
         self.fc2 = nn.Linear(256, 4)
 
     def forward(self, x):
-        # Max pooling over a (2, 2) window
+        x = x / 255.0
         x = self.relu1(self.conv1(x))
-
-        # If the size is a square you can only specify a single number
+        x = self.pad2(x)
         x = self.relu2(self.conv2(x))
+        x = self.pad3(x)
         x = self.relu3(self.conv3(x))
-        x = x.view(-1, 7744)
+        x = self.perm(x)
+        x = x.view(-1, self.num_flat_features(x))
         x = self.relu4(self.fc1(x))
         x = self.fc2(x)
         return x
@@ -89,7 +93,6 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     print('Loading the trained ANN...')
     print()
 
-    # Create and train an ANN on the MNIST dataset.
     ANN = Net()
     ANN.load_state_dict(
         torch.load(
@@ -98,7 +101,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     )
 
     environment = make_atari('BreakoutNoFrameskip-v4')
-    environment = wrap_deepmind(environment, frame_stack=True, scale=True)
+    environment = wrap_deepmind(environment, frame_stack=True, scale=False, clip_rewards=False, episode_life=False)
 
     f = f'{seed}_{n_episodes}_states.pt'
     if os.path.isfile(os.path.join(params_path, f)):
@@ -114,17 +117,18 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
         states = []
 
         for i in range(n_episodes):
-            state = torch.tensor(environment.reset()).to(device).unsqueeze(0).permute(0, 3, 1, 2)
+            state = torch.tensor(environment.reset()).to(device).unsqueeze(0).permute(0, 3, 1, 2).float()
 
             for t in itertools.count():
                 states.append(state)
 
                 q_values = ANN(state)[0]
+
                 probs, best_action = policy(q_values, epsilon)
                 action = np.random.choice(np.arange(len(probs)), p=probs)
 
                 state, reward, done, _ = environment.step(action)
-                state = torch.tensor(state).unsqueeze(0).permute(0, 3, 1, 2)
+                state = torch.tensor(state).unsqueeze(0).permute(0, 3, 1, 2).float()
                 state = state.to(device)
 
                 episode_rewards[i] += reward
@@ -145,18 +149,24 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     print('Converting ANN to SNN...')
 
     # Do ANN to SNN conversion.
-    SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states, percentile=percentile)
+    SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
 
     for l in SNN.layers:
         if l != 'Input':
             SNN.add_monitor(
                 Monitor(SNN.layers[l], state_vars=['s', 'v'], time=time), name=l
             )
+        else:
+            SNN.add_monitor(
+                Monitor(SNN.layers[l], state_vars=['s'], time=time), name=l
+            )
 
     spike_ims = None
     spike_axes = None
     inpt_ims = None
     inpt_axes = None
+    voltage_ims = None
+    voltage_axes = None
 
     new_life = True
     rewards = np.zeros(n_snn_episodes)
@@ -172,17 +182,22 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
         state = torch.tensor(environment.reset()).to(device).unsqueeze(0).permute(0, 3, 1, 2)
         prev_life = 5
 
+        start = t_()
         for t in itertools.count():
+            print(f'Timestep {t} (elapsed {t_() - start:.2f})')
+            start = t_()
+
             sys.stdout.flush()
 
             state = state.repeat(time, 1, 1, 1, 1)
 
-            inpts = {'Input': state}
+            inpts = {'Input': state.float() / 255.0}
+
             SNN.run(inpts=inpts, time=time)
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
-            voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors}
-            probs, best_action = policy(voltages['9'].sum(1), epsilon)
+            voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors if not layer == 'Input'}
+            probs, best_action = policy(voltages['12'].sum(1), epsilon)
             action = np.random.choice(np.arange(len(probs)), p=probs)
 
             if action == 0:
@@ -217,6 +232,10 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
                 inpt = state.view(time, 4, 84, 84).sum(0).sum(0).view(84, 84)
                 spike_ims, spike_axes = plot_spikes(
                     {layer: spikes[layer] for layer in spikes}, ims=spike_ims, axes=spike_axes
+                )
+                voltage_ims, voltage_axes = plot_voltages(
+                    {layer: voltages[layer].view(time, -1) for layer in voltages},
+                    ims=voltage_ims, axes=voltage_axes
                 )
                 inpt_axes, inpt_ims = plot_input(inpt, inpt, ims=inpt_ims, axes=inpt_axes)
                 plt.pause(1e-8)
