@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
@@ -26,11 +25,12 @@ data = 'mnist'
 
 data_path = os.path.join(ROOT_DIR, 'data', 'MNIST')
 params_path = os.path.join(ROOT_DIR, 'params', data, model)
+spikes_path = os.path.join(ROOT_DIR, 'spikes', data, model)
 curves_path = os.path.join(ROOT_DIR, 'curves', data, model)
 results_path = os.path.join(ROOT_DIR, 'results', data, model)
 confusion_path = os.path.join(ROOT_DIR, 'confusion', data, model)
 
-for path in [params_path, curves_path, results_path, confusion_path]:
+for path in [params_path, spikes_path, curves_path, results_path, confusion_path]:
     if not os.path.isdir(path):
         os.makedirs(path)
 
@@ -105,6 +105,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
     # Record spikes during the simulation.
     spike_record = torch.zeros(update_interval, time, n_neurons)
+    full_spike_record = torch.zeros(n_examples, n_neurons).long()
 
     # Neuron assignments and spike proportions.
     if train:
@@ -207,6 +208,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
 
         # Add to spikes recording.
         spike_record[i % update_interval] = spikes['Y'].get('s').t()
+        full_spike_record[i] = spikes['Y'].get('s').t().sum(1).long()
 
         # Optionally plot various simulation information.
         if plot:
@@ -317,6 +319,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     to_write = ['train'] + params if train else ['test'] + test_params
     f = '_'.join([str(x) for x in to_write]) + '.pt'
     torch.save(confusions, os.path.join(confusion_path, f))
+
+    # Save full spike record to disk.
+    torch.save(full_spike_record, os.path.join(spikes_path, f))
 
 
 if __name__ == '__main__':
