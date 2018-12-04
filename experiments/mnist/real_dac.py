@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 import argparse
 import numpy as np
@@ -150,14 +149,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
 
     start = t()
     for i in range(n_examples):
-        if i % progress_interval == 0 and train:
-            network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
-
         if i % progress_interval == 0:
             print(f'Progress: {i} / {n_examples} ({t() - start:.4f} seconds)')
             start = t()
 
         if i % update_interval == 0 and i > 0:
+            if train:
+                network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
+
             if i % len(labels) == 0:
                 current_labels = labels[-update_interval:]
             else:
@@ -211,7 +210,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
         spike_record[i % update_interval] = spikes['Y'].get('s').t()
 
         # Optionally plot various simulation information.
-        if plot:
+        if plot and i % update_interval == 0:
             _input = images[i % n_examples].view(28, 28)
             reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
@@ -225,7 +224,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, time=50,
             # assigns_im = plot_assignments(square_assignments, im=assigns_im)
             # perf_ax = plot_performance(curves, ax=perf_ax)
 
-            plt.pause(1e-8)
+            plt.pause(1e-1)
 
         network.reset_()  # Reset state variables.
 
@@ -327,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_train', type=int, default=60000)
     parser.add_argument('--n_test', type=int, default=10000)
     parser.add_argument('--inhib', type=float, default=250)
-    parser.add_argument('--time', type=int, default=50)
+    parser.add_argument('--time', type=int, default=25)
     parser.add_argument('--lr', type=float, default=1e-2)
     parser.add_argument('--lr_decay', type=float, default=0.99)
     parser.add_argument('--dt', type=int, default=1)

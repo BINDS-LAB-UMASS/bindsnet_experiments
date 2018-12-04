@@ -10,7 +10,7 @@ from sklearn.metrics import confusion_matrix
 
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
-from bindsnet.encoding import poisson
+from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network, Network
 from bindsnet.network.monitors import Monitor
 from bindsnet.network.nodes import DiehlAndCookNodes, Input
@@ -86,12 +86,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         )
         network.add_connection(input_connection, source='X', target='Y')
 
-        w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
-        recurrent_connection = Connection(
-            source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
-        )
-        network.add_connection(recurrent_connection, source='Y', target='Y')
-
     else:
         network = load_network(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
@@ -140,6 +134,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     voltage_ims = None
     voltage_axes = None
     weights_im = None
+    theta_im = None
 
     unclamps = {}
     for label in range(n_classes):
@@ -149,8 +144,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
 
     predictions = torch.zeros(n_examples)
     corrects = torch.zeros(n_examples)
-
     spike_record = torch.zeros(n_examples, n_neurons)
+
+    flag = False
 
     start = t()
     for i in range(n_examples):
@@ -162,10 +158,19 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             network.save(os.path.join(params_path, model_name + '.pt'))
             network.connections['X', 'Y'].update_rule.nu[1] *= lr_decay
 
+            if not flag:
+                w = -inhib * (torch.ones(n_neurons, n_neurons) - torch.diag(torch.ones(n_neurons)))
+                recurrent_connection = Connection(
+                    source=network.layers['Y'], target=network.layers['Y'], w=w, wmin=-inhib, wmax=0
+                )
+                network.add_connection(recurrent_connection, source='Y', target='Y')
+
+            flag = True
+
         # Get next input sample.
         image = images[i % len(images)]
         label = labels[i % len(images)].item()
-        sample = poisson(datum=image, time=time, dt=dt)
+        sample = bernoulli(datum=image, time=time, dt=dt, max_prob=1)
         inpts = {'X': sample}
 
         # Run the network on the input.
@@ -173,19 +178,6 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
         else:
             network.run(inpts=inpts, time=time)
-
-        if not train:
-            retries = 0
-            while monitors['Y'].get('s').sum() == 0 and retries < 3:
-                retries += 1
-                image *= 1.5
-                sample = poisson(datum=image, time=time, dt=dt)
-                inpts = {'X': sample}
-
-                if train:
-                    network.run(inpts=inpts, time=time, unclamp={'Y': unclamps[label]})
-                else:
-                    network.run(inpts=inpts, time=time)
 
         output = monitors['Y'].get('s')
         summed_neurons = output.sum(dim=1).view(n_classes, per_class)
@@ -199,7 +191,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
         spike_record[i] = output.float().sum(dim=1)
 
         # Optionally plot various simulation information.
-        if plot:
+        if plot and i % update_interval == 0:
             # _input = image.view(28, 28)
             # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             # v = {'Y': monitors['Y'].get('v')}
@@ -207,6 +199,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             s = {layer: monitors[layer].get('s') for layer in monitors}
             input_exc_weights = network.connections['X', 'Y'].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
+            theta = network.layers['Y'].theta.view(per_class, per_class)
 
             # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             # voltage_ims, voltage_axes = plot_voltages(v, ims=voltage_ims, axes=voltage_axes)
@@ -214,7 +207,14 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             spike_ims, spike_axes = plot_spikes(s, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
 
-            plt.pause(1e-8)
+            if theta_im is None:
+                theta_im = plt.matshow(theta)
+                cax = plt.colorbar()
+            else:
+                theta_im.set_data(theta)
+                cax.set_clim(theta.min(), theta.max())
+
+            plt.pause(1e-1)
 
         network.reset_()  # Reset state variables.
 
@@ -264,9 +264,10 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
     # Compute confusion matrices and save them to disk.
     confusion = confusion_matrix(labels, predictions)
 
-    plt.ioff()
-    plt.matshow(confusion)
-    plt.show()
+    if plot:
+        plt.ioff()
+        plt.matshow(confusion)
+        plt.show()
 
     to_write = ['train'] + params if train else ['test'] + test_params
     f = '_'.join([str(x) for x in to_write]) + '.pt'
@@ -285,7 +286,7 @@ if __name__ == '__main__':
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.99, help='rate at which to decay learning rate')
-    parser.add_argument('--time', default=100, type=int, help='simulation time')
+    parser.add_argument('--time', default=50, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
     parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
