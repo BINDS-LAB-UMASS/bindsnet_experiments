@@ -277,7 +277,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--time', type=int, default=100)
-    parser.add_argument('--n_episodes', type=int, default=100)
+    parser.add_argument('--n_episodes', type=int, default=1)
     parser.add_argument('--n_snn_episodes', type=int, default=100)
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--epsilon', type=float, default=0.05)
