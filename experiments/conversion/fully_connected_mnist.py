@@ -38,7 +38,16 @@ class FullyConnectedNetwork(nn.Module):
         return x
 
 
-def main(n_epochs=5, batch_size=100, time=50, update_interval=50, plot=False):
+def main(seed=0, n_epochs=5, batch_size=100, time=50, update_interval=50, plot=False):
+
+    np.random.seed(seed)
+
+    if torch.cuda.is_available():
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.cuda.manual_seed_all(seed)
+    else:
+        torch.manual_seed(seed)
+
     print()
     print('Creating and training the ANN...')
     print()
@@ -128,6 +137,7 @@ def main(n_epochs=5, batch_size=100, time=50, update_interval=50, plot=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--n_epochs', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--time', type=int, default=50)
