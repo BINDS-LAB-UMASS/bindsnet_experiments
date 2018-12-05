@@ -148,6 +148,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     print()
     print('Converting ANN to SNN...')
 
+    states = states.to(device)
+
     # Do ANN to SNN conversion.
     SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
 
