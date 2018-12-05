@@ -31,7 +31,7 @@ for i in filters:
 
     plt.plot(curve, label=f'LC-SNN ({i} filters)')
 
-filters = [100, 300, 500]
+filters = [100, 400, 1600, 6400]
 for i in filters:
     curve = torch.load(
         os.path.join(
@@ -46,7 +46,9 @@ for i in filters:
     curve[0] = 10
     curve[-2:] = curve[-3]
 
-    plt.plot(curve, linestyle='--', label=f'D&C ({i} neurons)')
+    plt.plot(curve, linestyle='--', label=f'BindsNET D&C ({i} neurons)')
+
+plt.axhline(95, color='r', linestyle=':', label='D&C (6400 neurons; 15 passes)')
 
 plt.xlabel('No. training examples')
 plt.ylabel('Estimated test accuracy')
