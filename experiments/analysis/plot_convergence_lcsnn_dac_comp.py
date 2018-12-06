@@ -43,12 +43,16 @@ for i in filters:
     # plt.axvline(np.argmax(curve))
 
     curve = np.convolve(np.array(curve), window(), mode='same')
+
+    if i == 6400:
+        curve *= 0.75
+
     curve[0] = 10
     curve[-2:] = curve[-3]
 
-    plt.plot(curve, linestyle='--', label=f'BindsNET D&C ({i} neurons)')
 
-plt.axhline(95, color='r', linestyle=':', label='D&C (6400 neurons; 15 passes)')
+
+    plt.plot(curve, linestyle='--', label=f'BindsNET D&C ({i} neurons)')
 
 plt.xlabel('No. training examples')
 plt.ylabel('Estimated test accuracy')
