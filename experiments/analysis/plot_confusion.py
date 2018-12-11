@@ -18,7 +18,6 @@ def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2
             model=model, data=data, train=train, cluster=cluster, param_string=param_string, match=match
         )
 
-    f = os.path.join('..', 'confusion', data, model, f'{mode}_{param_string}.pt')
     confusions = torch.load(open(f, 'rb'))
 
     if data in ['mnist', 'cifar10']:
@@ -35,15 +34,16 @@ def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2
         if not os.path.isdir(path):
             os.makedirs(path)
 
-        plt.matshow(normed)
+        plt.matshow(normed, vmin=0, vmax=1)
         plt.xlabel('Predicted')
         plt.ylabel('Actual')
         plt.colorbar()
         plt.xticks(range(len(labels)), labels)
         plt.yticks(range(len(labels)), labels, rotation='vertical')
-        plt.tight_layout()
 
         plt.savefig(os.path.join(path, f'{scheme}.png'))
+
+    plt.show()
 
 
 if __name__ == '__main__':

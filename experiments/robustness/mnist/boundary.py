@@ -1,9 +1,6 @@
 import os
-import pdb
 import torch
 import foolbox
-import numpy as np
-import matplotlib.pyplot as plt
 
 from bindsnet.datasets import MNIST
 from bindsnet.network import load_network

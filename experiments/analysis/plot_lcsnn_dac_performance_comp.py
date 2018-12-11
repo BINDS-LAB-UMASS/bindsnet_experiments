@@ -6,15 +6,15 @@ import matplotlib.pyplot as plt
 from experiments import ROOT_DIR
 
 
-lcsnn_filters = np.array([25, 50, 100, 250, 500])
-lcsnn_synapses = np.array([32400, 64800, 129600, 576000, 1150000])
-lcsnn_neurons = np.array([225, 450, 900, 2250, 4500])
-lcsnn_means = np.array([84.01, 88.21, 91.68, 93.71, 94.59])
-lcsnn_stds = np.array([2.28, 1.79, 1.31, 0.68, 0.61])
+lcsnn_filters = np.array([25, 50, 100, 250, 500, 1000])
+lcsnn_synapses = np.array([32400, 64800, 129600, 576000, 1150000, 2300000])
+lcsnn_neurons = np.array([225, 450, 900, 2250, 4500, 9000])
+lcsnn_means = np.array([84.01, 88.21, 91.68, 93.71, 94.59, 95.07])
+lcsnn_stds = np.array([2.28, 1.79, 1.31, 0.68, 0.61, 0.63])
 
-brian_dac_neurons = np.array([100, 400, 1600, 6400])
-brian_dac_synapses = np.array([784 * n for n in brian_dac_neurons])
-brian_dac_means = np.array([82.9, 87.0, 91.9, 95.0])
+# brian_dac_neurons = np.array([100, 400, 1600, 6400])
+# brian_dac_synapses = np.array([784 * n for n in brian_dac_neurons])
+# brian_dac_means = np.array([82.9, 87.0, 91.9, 95.0])
 
 bindsnet_dac_neurons = np.array([100, 225, 400, 625, 900, 1225, 1600, 2025, 2500])  # , 3600, 4900, 6400])
 bindsnet_dac_synapses = np.array([784 * n for n in bindsnet_dac_neurons])
@@ -29,9 +29,9 @@ plt.fill_between(
     lcsnn_synapses, lcsnn_means - lcsnn_stds, lcsnn_means + lcsnn_stds, alpha=0.2
 )
 
-plt.plot(brian_dac_synapses, brian_dac_means, 'o-', label='BRIAN D&C')
+# plt.plot(brian_dac_synapses, brian_dac_means, 'o-', label='BRIAN D&C')
 
-plt.plot(bindsnet_dac_synapses, bindsnet_dac_means, 'o-', label='LC-SNN')
+plt.plot(bindsnet_dac_synapses, bindsnet_dac_means, 'o-', label='baseline SNN')
 plt.fill_between(
     bindsnet_dac_synapses, bindsnet_dac_means - bindsnet_dac_stds, bindsnet_dac_means + bindsnet_dac_stds, alpha=0.2
 )
@@ -57,9 +57,9 @@ plt.fill_between(
     lcsnn_neurons, lcsnn_means - lcsnn_stds, lcsnn_means + lcsnn_stds, alpha=0.2
 )
 
-plt.plot(brian_dac_neurons, brian_dac_means, 'o-', label='BRIAN D&C')
+# plt.plot(brian_dac_neurons, brian_dac_means, 'o-', label='BRIAN D&C')
 
-plt.plot(bindsnet_dac_neurons, bindsnet_dac_means, 'o-', label='LC-SNN')
+plt.plot(bindsnet_dac_neurons, bindsnet_dac_means, 'o-', label='baseline SNN')
 plt.fill_between(
     bindsnet_dac_neurons, bindsnet_dac_means - bindsnet_dac_stds, bindsnet_dac_means + bindsnet_dac_stds, alpha=0.2
 )
@@ -80,7 +80,7 @@ plt.savefig(
 # Spikes.
 plt.figure()
 
-filters = [25, 50, 100, 250, 500]
+filters = [25, 50, 100, 250, 500, 1000]
 neurons = [9 * f for f in filters]
 
 # means = np.zeros(len(neurons))
@@ -108,9 +108,10 @@ for i, n_filters in enumerate(lcsnn_filters):
         )
     )
     means[i] = spikes.sum(1).float().mean().item()
+    stds[i] = spikes.sum(1).float().std().item()
 
-plt.plot(means, lcsnn_means, 'o-', label='LC-SNN')  # (test)')
-plt.fill_between(means, lcsnn_means + lcsnn_stds, lcsnn_means - lcsnn_stds, alpha=0.2)
+plt.plot(lcsnn_neurons, means, 'o-', label='LC-SNN')  # (test)')
+plt.fill_between(lcsnn_neurons, means - stds, means + stds, alpha=0.2)
 
 # means = np.zeros(len(neurons))
 # stds = np.zeros(len(neurons))
@@ -137,18 +138,19 @@ for i, n_neurons in enumerate(bindsnet_dac_neurons):
         )
     )
     means[i] = spikes.sum(1).float().mean().item()
+    stds[i] = spikes.sum(1).float().std().item()
 
-plt.plot(means, bindsnet_dac_means, 'o-', label='baseline SNN')  # (test)')
+plt.plot(bindsnet_dac_neurons, means, 'o-', label='baseline SNN')  # (test)')
 plt.fill_between(
-    means, bindsnet_dac_means + bindsnet_dac_stds, bindsnet_dac_means - bindsnet_dac_stds, alpha=0.2
+    bindsnet_dac_neurons, means - stds, means + stds, alpha=0.2
 )
 
 plt.legend()
-plt.xlabel('Average no. spikes')
-plt.ylabel('Test accuracy')
+plt.xlabel('No. neurons')
+plt.ylabel('Avg. no. spikes')
 plt.xscale('log')
 plt.grid()
-plt.title('Performance comparison by spikes')
+plt.title('Number of spikes vs. number of neurons')
 
 plt.savefig(
     os.path.join(

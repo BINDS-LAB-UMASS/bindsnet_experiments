@@ -16,10 +16,11 @@ def print_results(results: Dict[str, list]) -> None:
     print()
     for s in results:
         last = results[s][-1]
-        mean = np.mean(results[s])
-        best = np.max(results[s])
+        mean = torch.mean(torch.tensor(results[s])).item()
+        std = torch.std(torch.tensor(results[s])).item()
+        best = torch.max(torch.tensor(results[s])).item()
 
-        print(f'Results for scheme "{s}": {last:.2f} (last), {mean:.2f} (mean), {best:.2f} (best)')
+        print(f'Results for scheme "{s}": {last:.2f} (last), {mean:.2f} (mean), {std:.2f} (std.), {best:.2f} (best)')
 
 
 def update_curves(curves: Dict[str, list], labels: torch.Tensor,

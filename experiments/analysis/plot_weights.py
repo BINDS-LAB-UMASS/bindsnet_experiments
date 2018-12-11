@@ -11,7 +11,7 @@ from experiments import ROOT_DIR
 from experiments.analysis import download_params
 
 
-def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy=0, p_delete=0):
+def main(model='diehl_and_cook_2015', data='mnist', param_string=None, cmap='hot_r', p_destroy=0, p_delete=0):
     assert param_string is not None, 'Pass "--param_string" argument on command line or main method.'
 
     f = os.path.join(ROOT_DIR, 'params', data, model, f'{param_string}.pt')
@@ -29,11 +29,11 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
 
             w = network.connections['X', 'Y'].w
             w = get_square_weights(w, n_sqrt, side)
-            plot_weights(w)
+            plot_weights(w, cmap=cmap)
 
         elif model in ['conv']:
             w = network.connections['X', 'Y'].w
-            plot_conv2d_weights(w, wmax = network.connections['X', 'Y'].wmax)
+            plot_conv2d_weights(w, wmax=network.connections['X', 'Y'].wmax, cmap=cmap)
 
         elif model in ['fully_conv', 'locally_connected', 'crop_locally_connected', 'bern_crop_locally_connected']:
             params = param_string.split('_')
@@ -71,7 +71,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
             w[:, mask] = 0
 
             plot_locally_connected_weights(
-                w, n_filters, kernel_size, conv_size, locations, side_length, wmin=w.min(), wmax=w.max()
+                w, n_filters, kernel_size, conv_size, locations, side_length, wmin=w.min(), wmax=w.max(), cmap=cmap
             )
 
         elif model in ['backprop']:
@@ -84,7 +84,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
                 for j in range(2):
                     w[i * 28: (i + 1) * 28, j * 28: (j + 1) * 28] = weights[i + j * 5]
 
-            plot_weights(w, wmin=-1, wmax=1)
+            plot_weights(w, wmin=-1, wmax=1, cmap=cmap)
 
         elif model in ['two_layer_backprop']:
             params = param_string.split('_')
@@ -99,11 +99,11 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
                 for j in range(2):
                     w[i * sqrt: (i + 1) * sqrt, j * sqrt: (j + 1) * sqrt] = weights[i + j * 5]
 
-            plot_weights(w, wmin=-1, wmax=1)
+            plot_weights(w, wmin=-1, wmax=1, cmap=cmap)
 
             w = network.connections['X', 'Y'].w
             square_weights = get_square_weights(w, sqrt, 28)
-            plot_weights(square_weights, wmin=-1, wmax=1)
+            plot_weights(square_weights, wmin=-1, wmax=1, cmap=cmap)
 
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
@@ -120,7 +120,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
                 w = network.connections[('X', 'Y')].w
 
             w = get_square_weights(w, n_sqrt, side)
-            plot_weights(w)
+            plot_weights(w, cmap=cmap)
 
         elif model in ['backprop']:
             w = network.connections['X', 'Y'].w
@@ -132,7 +132,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
                 for k in range(2):
                     w[j * 50: (j + 1) * 50, k * 72: (k + 1) * 72] = weights[j + k * 2]
 
-            plot_weights(w)
+            plot_weights(w, cmap=cmap)
 
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
@@ -149,7 +149,7 @@ def main(model='diehl_and_cook_2015', data='mnist', param_string=None, p_destroy
                 for j in range(2):
                     w[i * 32: (i + 1) * 32, j * 32: (j + 1) * 32] = weights[i + j * 5]
 
-            plot_weights(w, wmin=wmin, wmax=wmax)
+            plot_weights(w, wmin=wmin, wmax=wmax, cmap=cmap)
 
         else:
             raise NotImplementedError('Weight plotting not implemented for this data, model combination.')
@@ -169,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='diehl_and_cook_2015')
     parser.add_argument('--data', type=str, default='mnist')
     parser.add_argument('--param_string', type=str, default=None)
+    parser.add_argument('--cmap', type=str, default='hot_r')
     parser.add_argument('--p_destroy', type=float, default=0)
     parser.add_argument('--p_delete', type=float, default=0)
     args = vars(parser.parse_args())
