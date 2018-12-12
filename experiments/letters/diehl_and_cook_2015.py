@@ -95,6 +95,9 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         images = images.cuda()
         labels = labels.cuda()
 
+    permutation = torch.randperm(images.size(0))
+    images = images[permutation]
+    labels = labels[permutation]
     images = images.view(-1, 784)
     images *= intensity
     labels -= 1

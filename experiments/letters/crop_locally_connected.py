@@ -1,5 +1,4 @@
 import os
-from typing import Optional, Union, Sequence
 
 import torch
 import argparse
@@ -11,15 +10,13 @@ from sklearn.metrics import confusion_matrix
 
 from torchvision.datasets import EMNIST
 
-from bindsnet.learning import NoOp, LearningRule, PostPre
+from bindsnet.learning import NoOp, PostPre
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network, AbstractConnection
+from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import LocallyConnectedNetwork
 from bindsnet.evaluation import assign_labels, update_ngram_scores
 from bindsnet.analysis.plotting import plot_locally_connected_weights, plot_spikes, plot_input
-from bindsnet.network.topology import Connection, LocallyConnectedConnection, Conv2dConnection
-from bindsnet.utils import im2col_indices
 
 from experiments import ROOT_DIR
 from experiments.utils import update_curves, print_results
@@ -51,8 +48,6 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     ]
 
     model_name = '_'.join([str(x) for x in params])
-
-    print(model_name)
 
     if not train:
         test_params = [
@@ -114,6 +109,9 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
         images = images.cuda()
         labels = labels.cuda()
 
+    permutation = torch.randperm(images.size(0))
+    images = images[permutation]
+    labels = labels[permutation]
     images *= intensity
     labels -= 1
 
@@ -180,7 +178,7 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
                 proportions=proportions, ngram_scores=ngram_scores, n=2
             )
             print_results(curves)
-
+            
             for scheme in preds:
                 predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
 
@@ -329,6 +327,8 @@ def main(seed=0, n_train=60000, n_test=10000, inhib=250, kernel_size=(16,), stri
     confusions = {}
     for scheme in predictions:
         confusions[scheme] = confusion_matrix(labels, predictions[scheme])
+
+    print(confusions, labels, predictions)
 
     to_write = ['train'] + params if train else ['test'] + test_params
     f = '_'.join([str(x) for x in to_write]) + '.pt'
