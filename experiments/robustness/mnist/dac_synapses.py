@@ -164,7 +164,7 @@ def main(seed=0, p_destroy=0):
     ]
 
     to_write = [str(x) for x in [seed, p_destroy] + results]
-    name = 'dac_neuron_robust.csv'
+    name = 'dac_synapse_robust.csv'
 
     if not os.path.isfile(os.path.join(results_path, name)):
         with open(os.path.join(results_path, name), 'w') as f:
