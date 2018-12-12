@@ -25,8 +25,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'large_dqn_eps_greedy')
-params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'large_dqn_eps_greedy')
+results_path = os.path.join(ROOT_DIR, 'results', 'breakout', 'occlusion_large_dqn_eps_greedy')
+params_path = os.path.join(ROOT_DIR, 'params', 'breakout', 'occlusion_large_dqn_eps_greedy')
 
 for p in [results_path, params_path]:
     if not os.path.isdir(p):
@@ -79,7 +79,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, occlusion=0, plot=False):
 
     np.random.seed(seed)
 
@@ -191,10 +191,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             sys.stdout.flush()
 
+            state[:, :, 77 - occlusion: 80 - occlusion, :] = 0
             state = state.repeat(time, 1, 1, 1, 1)
-
             inpts = {'Input': state.float() / 255.0}
-
             SNN.run(inpts=inpts, time=time)
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
@@ -251,12 +250,12 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             state = next_state
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon]])
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon, occlusion]])
     columns = [
-        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'epsilon', 'avg. reward', 'std. reward'
+        'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'epsilon', 'occlusion', 'avg. reward', 'std. reward'
     ]
     data = [[
-        seed, time, n_episodes, n_snn_episodes, percentile, epsilon, np.mean(rewards), np.std(rewards)
+        seed, time, n_episodes, n_snn_episodes, percentile, epsilon, occlusion, np.mean(rewards), np.std(rewards)
     ]]
 
     path = os.path.join(results_path, 'results.csv')
@@ -278,11 +277,12 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--time', type=int, default=100)
+    parser.add_argument('--time', type=int, default=200)
     parser.add_argument('--n_episodes', type=int, default=1)
     parser.add_argument('--n_snn_episodes', type=int, default=100)
-    parser.add_argument('--percentile', type=float, default=99)
+    parser.add_argument('--percentile', type=float, default=99.99)
     parser.add_argument('--epsilon', type=float, default=0.05)
+    parser.add_argument('--occlusion', type=int, default=0)
     parser.add_argument('--plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
