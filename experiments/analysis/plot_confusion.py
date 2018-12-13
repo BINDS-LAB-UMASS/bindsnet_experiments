@@ -24,6 +24,11 @@ def main(model='diehl_and_cook_2015', data='mnist', train=False, cluster='swarm2
         labels = range(10)
     elif data == 'breakout':
         labels = ['no-op', 'fire', 'right', 'left']
+    elif data in ['letters']:
+        labels = [
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+            'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
+        ]
 
     for scheme in confusions:
         confusion = confusions[scheme]

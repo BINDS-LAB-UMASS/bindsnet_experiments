@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-n_train=60000
+n_train=120000
 n_test=10000
 inhib=250
 time=250
@@ -10,17 +10,17 @@ norm=0.2
 
 for seed in 0 1 2 3 4
 do
-    for kernel_size in 16
+    for kernel_size in 12 16
     do
-        for stride in 2
+        for stride in 2 4
         do
-            for n_filters in 1000 
+            for n_filters in 25 50 100 250 500 1000
             do
                 for crop in 4
                 do
                     for lr in 1e-2
                     do
-                        for lr_decay in 0.99 0.995
+                        for lr_decay in 0.99
                         do
                             for intensity in 0.5
                             do

@@ -2,17 +2,17 @@
 
 for seed in 0
 do
-    for time in 25 50 100
+    for time in 200 250
     do
-        for n_episodes in 1
+        for n_episodes in 1 3
         do
             for n_snn_episodes in 100
             do
-                for percentile in 98 98.5 99 99.5 99.9 100
+                for percentile in 99.975 99.98 99.985 99.99 99.995 99.999
                 do
                     for epsilon in 0.05
                     do
-                        sbatch submit.sh $seed $time $n_episodes $n_snn_episodes $percentile $epsilon
+                        sbatch gpu.sh $seed $time $n_episodes $n_snn_episodes $percentile $epsilon
                     done
                 done
             done
