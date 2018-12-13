@@ -192,6 +192,13 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             sys.stdout.flush()
 
             state[:, :, 77 - occlusion: 80 - occlusion, :] = 0
+
+            import matplotlib.pyplot as plt
+            print(state.size())
+            plt.matshow(state.float().mean(1).squeeze(0).cpu())
+            plt.ioff()
+            plt.show()
+
             state = state.repeat(time, 1, 1, 1, 1)
             inpts = {'Input': state.float() / 255.0}
             SNN.run(inpts=inpts, time=time)

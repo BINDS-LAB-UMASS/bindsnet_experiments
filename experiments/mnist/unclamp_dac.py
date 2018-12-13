@@ -1,4 +1,6 @@
 import os
+from typing import Optional, Iterable, Union
+
 import torch
 import argparse
 import numpy as np
@@ -13,7 +15,7 @@ from bindsnet.datasets import MNIST
 from bindsnet.encoding import bernoulli
 from bindsnet.network import load_network, Network
 from bindsnet.network.monitors import Monitor
-from bindsnet.network.nodes import DiehlAndCookNodes, Input
+from bindsnet.network.nodes import DiehlAndCookNodes, Input, Nodes
 from bindsnet.network.topology import Connection
 from bindsnet.utils import get_square_weights
 from bindsnet.learning import WeightDependentPostPre
@@ -207,12 +209,12 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=250, lr=1e-2,
             spike_ims, spike_axes = plot_spikes(s, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
 
-            if theta_im is None:
-                theta_im = plt.matshow(theta)
-                cax = plt.colorbar()
-            else:
-                theta_im.set_data(theta)
-                cax.set_clim(theta.min(), theta.max())
+            # if theta_im is None:
+            #     theta_im = plt.matshow(theta)
+            #     cax = plt.colorbar()
+            # else:
+            #     theta_im.set_data(theta)
+            #     cax.set_clim(theta.min(), theta.max())
 
             plt.pause(1e-1)
 
