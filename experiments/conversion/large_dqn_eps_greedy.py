@@ -14,6 +14,7 @@ import torch.nn as nn
 from bindsnet.network.monitors import Monitor
 from bindsnet.conversion import Permute, ann_to_snn
 from bindsnet.analysis.plotting import plot_spikes, plot_input, plot_voltages
+from bindsnet.network.nodes import LIFNodes
 
 from experiments import ROOT_DIR
 from experiments.misc.atari_wrappers import make_atari, wrap_deepmind
@@ -79,7 +80,7 @@ def policy(q_values, eps):
     return A, best_action
 
 
-def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False):
+def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, epsilon=0.05, plot=False, node_type='subtractiveIF'):
 
     np.random.seed(seed)
 
@@ -151,7 +152,10 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     states = states.to(device)
 
     # Do ANN to SNN conversion.
-    SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
+    if node_type == 'subtractiveIF':
+        SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
+    elif node_type == 'LIF':
+        SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile, node_type=LIFNodes, decay=1e-2 / 13.0)
 
     for l in SNN.layers:
         if l != 'Input':
@@ -284,6 +288,7 @@ if __name__ == '__main__':
     parser.add_argument('--percentile', type=float, default=99)
     parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--plot', dest='plot', action='store_true')
+    parser.add_argument('--node_type', type=str, default='subtractiveIF')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
 
