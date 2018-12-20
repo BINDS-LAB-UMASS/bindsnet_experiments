@@ -15,6 +15,7 @@ from bindsnet.network.monitors import Monitor
 from bindsnet.conversion import Permute, ann_to_snn
 from bindsnet.analysis.plotting import plot_spikes, plot_input, plot_voltages
 from bindsnet.network.nodes import LIFNodes
+from bindsnet.network.nodes import IFNodes
 
 from experiments import ROOT_DIR
 from experiments.misc.atari_wrappers import make_atari, wrap_deepmind
@@ -156,6 +157,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
         SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
     elif node_type == 'LIF':
         SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile, node_type=LIFNodes, decay=1e-2 / 13.0, rest=0.0)
+    elif node_type == 'IF':
+        SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile, node_type=IFNodes)
+
 
     for l in SNN.layers:
         if l != 'Input':
