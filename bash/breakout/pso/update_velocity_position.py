@@ -18,7 +18,9 @@ for index, x in enumerate(pos):
     avg_reward = 0
     for seed in range(5):
         model_name = '_'.join([str(x) for x in [seed, x[0], x[1], x[2], x[3], x[4]]])
-        avg_reward += df.loc[model_name]['avg. reward']
+
+        if model_name in df.index:
+            avg_reward += df.loc[model_name]['avg. reward']
     perf = np.mean(avg_reward)
     if best[index][num_dim] < np.mean(perf):
         best[index] = [x[0], x[1], x[2], x[3], x[4], perf]
