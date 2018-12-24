@@ -20,8 +20,8 @@ parameter5=${8:-1}
 
 cd ../../../experiments/conversion/
 echo $seed $time $n_snn_episodes $parameter1 $parameter2 $parameter3 $parameter4 $parameter5
-python3 large_dqn_lif.py --seed $seed --time $time --n_snn_episodes $n_snn_episodes\
-                                         --parameter1 $parameter1 --parameter2 $parameter2\
-                                         --parameter3 $parameter3 --parameter4 $parameter4\
-                                         --parameter5 $parameter5
+python3 large_dqn_lif.py @@seed $seed @@time $time @@n_snn_episodes $n_snn_episodes\
+                                         @@parameter1 $parameter1 @@parameter2 $parameter2\
+                                         @@parameter3 $parameter3 @@parameter4 $parameter4\
+                                         @@parameter5 $parameter5
 exit
