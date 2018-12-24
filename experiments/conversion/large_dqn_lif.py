@@ -521,8 +521,8 @@ if __name__ == '__main__':
     parser.add_argument('@@parameter2', type=float, default=1.0)
     parser.add_argument('@@parameter3', type=float, default=1.0)
     parser.add_argument('@@parameter4', type=float, default=1.0)
-    parser.add_argument('@@:parameter5', type=float, default=1.0)
-    parser.add_argument('--plot', dest='plot', action='store_true')
+    parser.add_argument('@@parameter5', type=float, default=1.0)
+    parser.add_argument('@@plot', dest='plot', action='store_true')
     parser.set_defaults(plot=False)
     args = vars(parser.parse_args())
 
