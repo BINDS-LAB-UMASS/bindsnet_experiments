@@ -8,8 +8,8 @@ particle_velocities = np.zeros([num_particles, num_dim])
 best_positions = np.zeros([num_particles, num_dim + 1])
 for i in range(num_particles):
     for dim in range(num_dim):
-        particle_positions[i][dim] = np.random.random_sample()*100
-        particle_velocities[i][dim] = (np.random.random_sample() * 100 - particle_positions[i][dim])/2
+        particle_positions[i][dim] = np.random.random_sample()*500
+        particle_velocities[i][dim] = (np.random.random_sample() * 500 - particle_positions[i][dim])/2
         best_positions[i][dim] = particle_positions[i][dim]
     best_positions[i][num_dim] = 0
 
