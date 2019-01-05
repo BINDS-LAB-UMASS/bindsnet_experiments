@@ -162,8 +162,11 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     elif node_type == 'IF':
         SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile, node_type=IFNodes)
 
-
-    for l in SNN.layers:
+    if plot:
+        layers = ['Input', '1', '4', '7', '10', '12']
+    else:
+        layers = ['12']
+    for l in layers:
         if l != 'Input':
             SNN.add_monitor(
                 Monitor(SNN.layers[l], state_vars=['s', 'v'], time=time), name=l
