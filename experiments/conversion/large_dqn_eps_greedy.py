@@ -52,6 +52,7 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(7744, 256)
         self.relu4 = nn.ReLU()
         self.fc2 = nn.Linear(256, 4)
+        self.relu5 = nn.ReLU()
 
     def forward(self, x):
         x = x / 255.0
@@ -64,6 +65,7 @@ class Net(nn.Module):
         x = x.view(-1, self.num_flat_features(x))
         x = self.relu4(self.fc1(x))
         x = self.fc2(x)
+        x = self.relu5(x)
         return x
 
     def num_flat_features(self, x):
