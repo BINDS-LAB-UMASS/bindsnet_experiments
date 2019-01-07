@@ -50,6 +50,7 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(7744, 256)
         self.relu4 = nn.ReLU()
         self.fc2 = nn.Linear(256, 4)
+        self.relu5 = nn.ReLU()
 
     def forward(self, x):
         x = x / 255.0
@@ -62,6 +63,7 @@ class Net(nn.Module):
         x = x.view(-1, self.num_flat_features(x))
         x = self.relu4(self.fc1(x))
         x = self.fc2(x)
+        x = self.relu5(x)
         return x
 
     def num_flat_features(self, x):
@@ -153,7 +155,12 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     # Do ANN to SNN conversion.
     SNN = ann_to_snn(ANN, input_shape=(1, 4, 84, 84), data=states / 255.0, percentile=percentile)
 
-    for l in SNN.layers:
+    if plot:
+        layers = ['Input', '1', '4', '7', '10', '12']
+    else:
+        layers = ['12']
+
+    for l in layers:
         if l != 'Input':
             SNN.add_monitor(
                 Monitor(SNN.layers[l], state_vars=['s', 'v'], time=time), name=l
@@ -201,7 +208,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             spikes = {layer: SNN.monitors[layer].get('s') for layer in SNN.monitors}
             voltages = {layer: SNN.monitors[layer].get('v') for layer in SNN.monitors if not layer == 'Input'}
-            probs, best_action = policy(voltages['12'].sum(1), epsilon)
+            probs, best_action = policy(spikes['12'].sum(1), epsilon)
             action = np.random.choice(np.arange(len(probs)), p=probs)
 
             next_state, reward, done, info = environment.step(action)
@@ -261,9 +268,9 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--time', type=int, default=200)
+    parser.add_argument('--time', type=int, default=500)
     parser.add_argument('--n_episodes', type=int, default=1)
-    parser.add_argument('--n_snn_episodes', type=int, default=100)
+    parser.add_argument('--n_snn_episodes', type=int, default=1)
     parser.add_argument('--percentile', type=float, default=99.99)
     parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--occlusion', type=int, default=0)
