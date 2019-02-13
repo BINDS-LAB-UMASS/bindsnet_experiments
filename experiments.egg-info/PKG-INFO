@@ -1,4 +1,4 @@
-Metadata-Version: 1.1
+Metadata-Version: 2.1
 Name: experiments
 Version: 0.1
 Summary: Experiments with BindsNET spiking neural network simulator
@@ -7,7 +7,6 @@ Author: Daniel Saunders
 Author-email: djsaunde@cs.umass.edu
 License: MIT
 Download-URL: https://github.com/djsaunde/bindsnet_experiments/archive/0.1.tar.gz
-Description-Content-Type: text/markdown
 Description: # BindsNET Experiments
         
         Collection of experimental Python and accompanying Bash scripts for training and evaluation of BindsNET networks.
@@ -69,3 +68,4 @@ Description: # BindsNET Experiments
         - `plots/`: Plots of variables network state variables or classification outcomes.
         - `results/`: Averaged and maximum train and test accuracy results from SNN experiments involving classification.
 Platform: UNKNOWN
+Description-Content-Type: text/markdown
