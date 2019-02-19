@@ -31,26 +31,29 @@ def main():
         'test_2_12_4_100_4_0.01_0.99_60000_10000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250'
     )
 
-    print(w.size())
-
+    fig, ax = plt.subplots()
     for i in tqdm(range(1, 40)):
         f = os.path.join(test_spikes_path, f'{i}.pt')
         spikes, labels = torch.load(f, map_location=map_location)
         for j in range(spikes.size(0)):
             s = spikes[j].sum(0).view(100, 9)
             max_indices = torch.argmax(s, dim=0)
+            zeros = [s[index, n].item() == 0 for index, n in zip(max_indices, range(9))]
             filters = [w[locations[:, n], index, n] for n, index in zip(range(9), max_indices)]
             x = torch.zeros(12 * 3, 12 * 3)
+
             for k in range(3):
                 for l in range(3):
-                    x[k*12: k*12 + 12, l*12: l*12 + 12] = filters[k * 3 + l].view(12, 12)
+                    if zeros[k*3 + l]:
+                        x[k * 12: k * 12 + 12, l * 12: l * 12 + 12] = torch.zeros(12, 12)
+                    else:
+                        x[k*12: k*12 + 12, l*12: l*12 + 12] = filters[k * 3 + l].view(12, 12)
 
-            plt.ioff()
-            plt.matshow(x, cmap='hot_r')
+            ax.matshow(x, cmap='hot_r')
             plt.xticks(())
             plt.yticks(())
             plt.title(f'Label: {labels[j].item()}')
-            plt.show()
+            plt.pause(1)
 
 
 if __name__ == '__main__':
