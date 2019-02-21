@@ -19,7 +19,7 @@ def main():
         f = os.path.join(path, f'{i}.pt')
         spikes, labels = torch.load(f, map_location=location)
         ngram_scores = update_ngram_scores(
-            spikes=spikes, labels=labels, n_labels=10, n=2, ngram_scores=ngram_scores
+            spikes=spikes, labels=labels, n_labels=10, n=1, ngram_scores=ngram_scores
         )
 
     all_labels = torch.LongTensor()
@@ -28,7 +28,7 @@ def main():
         f = os.path.join(path, f'{i}.pt')
         spikes, labels = torch.load(f, map_location=location)
         predictions = ngram(
-            spikes=spikes, ngram_scores=ngram_scores, n_labels=10, n=2
+            spikes=spikes, ngram_scores=ngram_scores, n_labels=10, n=1
         )
         all_labels = torch.cat([all_labels, labels.long()])
         all_predictions = torch.cat([all_predictions, predictions.long()])
@@ -47,7 +47,7 @@ def main():
         f = os.path.join(path, f'{i}.pt')
         spikes, labels = torch.load(f, map_location=location)
         predictions = ngram(
-            spikes=spikes, ngram_scores=ngram_scores, n_labels=10, n=2
+            spikes=spikes, ngram_scores=ngram_scores, n_labels=10, n=1
         )
         all_labels = torch.cat([all_labels, labels.long()])
         all_predictions = torch.cat([all_predictions, predictions.long()])
