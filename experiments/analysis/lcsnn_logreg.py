@@ -16,7 +16,7 @@ def main():
 
     all_spikes = []
     all_labels = []
-    for i in tqdm(range(200, 240)):
+    for i in tqdm(range(1, 240)):
         f = os.path.join(path, f'{i}.pt')
         spikes, labels = torch.load(f, map_location=location)
         all_spikes.append(spikes.sum(1))
