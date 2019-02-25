@@ -1,5 +1,6 @@
 import os
 import torch
+import argparse
 
 from tqdm import tqdm
 from experiments import ROOT_DIR
@@ -8,10 +9,10 @@ from sklearn.linear_model import LogisticRegression
 location = 'gpu' if torch.cuda.is_available() else 'cpu'
 
 
-def main():
+def main(seed=0, n_filters=100):
     path = os.path.join(
-        ROOT_DIR, 'spikes', 'mnist', 'crop_locally_connected',
-        'train_2_12_4_100_4_0.01_0.99_60000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250'
+        '/', 'media', 'bigdrive2', 'djsaunde', 'crop_locally_connected',
+        f'train_{seed}_12_4_{n_filters}_4_0.01_0.99_60000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250'
     )
 
     all_spikes = []
@@ -31,8 +32,8 @@ def main():
     print(f'Training accuracy: {accuracy:.2f}')
 
     path = os.path.join(
-        ROOT_DIR, 'spikes', 'mnist', 'crop_locally_connected',
-        'test_2_12_4_100_4_0.01_0.99_60000_10000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250'
+        '/', 'media', 'bigdrive2', 'djsaunde', 'crop_locally_connected',
+        f'test_{seed}_12_4_{n_filters}_4_0.01_0.99_60000_10000_250.0_250_1.0_0.05_1e-07_0.5_0.2_10_250'
     )
 
     all_spikes = []
@@ -51,4 +52,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--n_filters', type=int, default=100)
+    args = parser.parse_args()
+    args = vars(args)
+    main(**args)
+
