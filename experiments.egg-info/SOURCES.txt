@@ -1,4 +1,5 @@
 README.md
+setup.py
 experiments/__init__.py
 experiments/utils.py
 experiments.egg-info/PKG-INFO
@@ -16,6 +17,7 @@ experiments/analysis/download_confusion.py
 experiments/analysis/download_curves.py
 experiments/analysis/download_params.py
 experiments/analysis/download_results.py
+experiments/analysis/lcsnn_temporal_voting.py
 experiments/analysis/plot_assignments.py
 experiments/analysis/plot_confusion.py
 experiments/analysis/plot_convergence_lcsnn_dac_comp.py
