@@ -21,7 +21,7 @@ cd ../../../experiments/conversion/
 
 echo $seed $time $n_episodes $n_snn_episodes $percentile $game $ann
 
-if $ann_value == 'true' then
+if [ "$ann_value" == 'true' ]; then
 
     python large_dqn_eps_greedy.py --seed $seed --time $time --n_episodes $n_episodes \
                                --n_snn_episodes $n_snn_episodes --percentile $percentile \
