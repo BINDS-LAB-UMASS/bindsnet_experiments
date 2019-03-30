@@ -103,7 +103,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     print()
 
     if model is None:
-        model = game + "_model.pkl"
+        model = "pytorch" + game + ".pt"
 
     ANN = Net()
     ANN.load_state_dict(
