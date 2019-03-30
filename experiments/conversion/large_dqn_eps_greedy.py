@@ -31,7 +31,7 @@ else:
 
 
 def policy(q_values, eps):
-    A = np.ones(4, dtype=float) * eps / 4
+    A = np.ones(len(q_values), dtype=float) * eps / len(q_values)
     best_action = torch.argmax(q_values)
     A[best_action] += (1.0 - eps)
     return A, best_action
