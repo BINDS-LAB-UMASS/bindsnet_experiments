@@ -29,6 +29,6 @@ if [ "$ann_value" == 'true' ]; then
 else
     python large_dqn_eps_greedy.py --seed $seed --time $time --n_episodes $n_episodes \
                                --n_snn_episodes $n_snn_episodes --percentile $percentile \
-                               --epsilon $epsilon
+                               --epsilon $epsilon --game $game
 fi
 exit

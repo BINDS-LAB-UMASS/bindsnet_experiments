@@ -49,6 +49,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
     name = ''.join([g.capitalize() for g in game.split('_')])
     environment = make_atari(name + 'NoFrameskip-v4')
     environment = wrap_deepmind(environment, frame_stack=True, scale=False, clip_rewards=False, episode_life=False)
+    environment.max_episode_steps = 18000
 
     class Net(nn.Module):
 
@@ -158,21 +159,6 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             columns = [
                 'seed', 'n_episodes', 'percentile', 'epsilon', 'avg. reward', 'std. reward', 'game'
             ]
-            data = [[
-                seed, n_episodes, percentile, epsilon, np.mean(episode_rewards), np.std(episode_rewards), game
-            ]]
-            path = os.path.join(results_path, 'ann_results.csv')
-            if not os.path.isfile(path):
-                df = pd.DataFrame(data=data, index=[model_name], columns=columns)
-            else:
-                df = pd.read_csv(path, index_col=0)
-
-                if model_name not in df.index:
-                    df = df.append(pd.DataFrame(data=data, index=[model_name], columns=columns))
-                else:
-                    df.loc[model_name] = data[0]
-
-            df.to_csv(path, index=True)
 
             torch.save(episode_rewards, os.path.join(results_path, f'{model_name}_ann_episode_rewards.pt'))
             return
@@ -282,7 +268,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
             state = next_state
 
-    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon]])
+    model_name = '_'.join([str(x) for x in [seed, time, n_episodes, n_snn_episodes, percentile, epsilon, game]])
+    torch.save(rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
     columns = [
         'seed', 'time', 'n_episodes', 'n_snn_episodes', 'percentile', 'epsilon', 'avg. reward', 'std. reward'
     ]
@@ -303,7 +290,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
     df.to_csv(path, index=True)
 
-    torch.save(rewards, os.path.join(results_path, f'{model_name}_episode_rewards.pt'))
+
 
 
 if __name__ == '__main__':
