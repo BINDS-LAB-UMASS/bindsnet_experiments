@@ -47,9 +47,8 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             os.makedirs(p)
 
     name = ''.join([g.capitalize() for g in game.split('_')])
-    environment = make_atari(name + 'NoFrameskip-v4')
+    environment = make_atari(name + 'NoFrameskip-v4', max_episode_steps=18000)
     environment = wrap_deepmind(environment, frame_stack=True, scale=False, clip_rewards=False, episode_life=False)
-    environment.max_episode_steps = 18000
 
     class Net(nn.Module):
 
