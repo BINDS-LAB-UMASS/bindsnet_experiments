@@ -15,7 +15,7 @@ do
                         for game in 'video_pinball'
                         do
                             sbatch gpu.sh $seed $time $n_episodes $n_snn_episodes $percentile $epsilon $game
-                        end
+                        done
                     done
                 done
             done

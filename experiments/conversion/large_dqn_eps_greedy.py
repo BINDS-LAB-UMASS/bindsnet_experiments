@@ -114,7 +114,7 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
 
 
 
-    f = f'{seed}_{n_episodes}_states.pt'
+    f = f'{n_episodes}_states.pt'
 
     if os.path.isfile(os.path.join(params_path, f)) and not ann:
         print('Loading pre-gathered observation data...')
