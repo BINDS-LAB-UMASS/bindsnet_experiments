@@ -67,7 +67,6 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             self.fc1 = nn.Linear(7744, 512)
             self.relu4 = nn.ReLU()
             self.fc2 = nn.Linear(512, environment.action_space.n)
-            self.relu5 = nn.ReLU()
 
         def forward(self, x):
             x = x / 255.0
@@ -80,7 +79,6 @@ def main(seed=0, time=50, n_episodes=25, n_snn_episodes=100, percentile=99.9, ep
             x = x.view(-1, self.num_flat_features(x))
             x = self.relu4(self.fc1(x))
             x = self.fc2(x)
-            x = self.relu5(x)
             return x
 
         def num_flat_features(self, x):
