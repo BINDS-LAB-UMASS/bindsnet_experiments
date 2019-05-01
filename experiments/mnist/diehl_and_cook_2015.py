@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
+from bindsnet.network import load
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.evaluation import assign_labels, update_ngram_scores
@@ -74,7 +74,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         )
 
     else:
-        network = load_network(os.path.join(params_path, model_name + '.pt'))
+        network = load(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
