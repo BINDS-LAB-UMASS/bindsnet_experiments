@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
+from bindsnet.network import load
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.evaluation import assign_labels, update_ngram_scores
@@ -36,7 +36,7 @@ for path in [params_path, spikes_path, curves_path, results_path, confusion_path
 
 
 def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=350, dt=1,
-         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False,
+         theta_plus=0.05, theta_decay=1e7, intensity=1, progress_interval=10, update_interval=250, plot=False,
          train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -74,7 +74,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         )
 
     else:
-        network = load_network(os.path.join(params_path, model_name + '.pt'))
+        network = load(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
@@ -329,7 +329,7 @@ if __name__ == '__main__':
     parser.add_argument('--time', default=350, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
-    parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
+    parser.add_argument('--theta_decay', type=float, default=1e7, help='adaptive threshold decay time constant')
     parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
