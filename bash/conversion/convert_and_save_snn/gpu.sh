@@ -12,13 +12,13 @@ seed=${1:-0}
 time=${2:-50}
 n_episodes=${3:-100}
 percentile=${4:-99}
-epsilon=${6:-0.05}
-game=${7}
-normalize_spikes=${8}
+epsilon=${5:-0.05}
+game=${6}
+normalize_spikes=${7}
 
 cd ../../../experiments/conversion/
 
-echo $seed $time $n_episodes $n_snn_episodes $percentile $game $normalize_spikes
+echo $seed $time $n_episodes $percentile $epsilon $game $normalize_spikes
 
 if [ "$normalize_spikes" == 'true' ]; then
 
