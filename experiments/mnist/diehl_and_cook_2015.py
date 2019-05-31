@@ -7,10 +7,14 @@ import matplotlib.pyplot as plt
 from time import time as t
 from sklearn.metrics import confusion_matrix
 
+from bindsnet.network import load
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
+<<<<<<< HEAD
 from bindsnet.network import load
+=======
+>>>>>>> 1f99614ba389946d189dc53a7718cee9c1eba993
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.evaluation import assign_labels, update_ngram_scores
