@@ -10,7 +10,7 @@ from sklearn.metrics import confusion_matrix
 from bindsnet.learning import NoOp
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import poisson
-from bindsnet.network import load_network
+from bindsnet.network import load
 from bindsnet.network.monitors import Monitor
 from bindsnet.models import DiehlAndCook2015v2
 from bindsnet.evaluation import assign_labels, update_ngram_scores
@@ -36,7 +36,7 @@ for path in [params_path, spikes_path, curves_path, results_path, confusion_path
 
 
 def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2, lr_decay=1, time=350, dt=1,
-         theta_plus=0.05, theta_decay=1e-7, intensity=1, progress_interval=10, update_interval=250, plot=False,
+         theta_plus=0.05, tc_theta_decay=1e7, intensity=1, progress_interval=10, update_interval=250, plot=False,
          train=True, gpu=False):
 
     assert n_train % update_interval == 0 and n_test % update_interval == 0, \
@@ -44,12 +44,12 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
 
     params = [
         seed, n_neurons, n_train, inhib, lr, lr_decay, time, dt, theta_plus,
-        theta_decay, intensity, progress_interval, update_interval
+        tc_theta_decay, intensity, progress_interval, update_interval
     ]
 
     test_params = [
         seed, n_neurons, n_train, n_test, inhib, lr, lr_decay, time, dt,
-        theta_plus, theta_decay, intensity, progress_interval, update_interval
+        theta_plus, tc_theta_decay, intensity, progress_interval, update_interval
     ]
 
     model_name = '_'.join([str(x) for x in params])
@@ -70,15 +70,15 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     if train:
         network = DiehlAndCook2015v2(
             n_inpt=784, n_neurons=n_neurons, inh=inhib, dt=dt, norm=78.4,
-            theta_plus=theta_plus, theta_decay=theta_decay, nu=[0, lr]
+            theta_plus=theta_plus, tc_theta_decay=tc_theta_decay, nu=[0, lr]
         )
 
     else:
-        network = load_network(os.path.join(params_path, model_name + '.pt'))
+        network = load(os.path.join(params_path, model_name + '.pt'))
         network.connections['X', 'Y'].update_rule = NoOp(
             connection=network.connections['X', 'Y'], nu=network.connections['X', 'Y'].nu
         )
-        network.layers['Y'].theta_decay = 0
+        network.layers['Y'].tc_theta_decay = 0
         network.layers['Y'].theta_plus = 0
 
     # Load MNIST data.
@@ -204,18 +204,18 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
 
         # Optionally plot various simulation information.
         if plot:
-            # _input = image.view(28, 28)
-            # reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
+            _input = image.view(28, 28)
+            reconstruction = inpts['X'].view(time, 784).sum(0).view(28, 28)
             _spikes = {layer: spikes[layer].get('s') for layer in spikes}
             input_exc_weights = network.connections[('X', 'Y')].w
             square_weights = get_square_weights(input_exc_weights.view(784, n_neurons), n_sqrt, 28)
-            # square_assignments = get_square_assignments(assignments, n_sqrt)
+            square_assignments = get_square_assignments(assignments, n_sqrt)
 
-            # inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
+            inpt_axes, inpt_ims = plot_input(_input, reconstruction, label=labels[i], axes=inpt_axes, ims=inpt_ims)
             spike_ims, spike_axes = plot_spikes(_spikes, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=weights_im)
-            # assigns_im = plot_assignments(square_assignments, im=assigns_im)
-            # perf_ax = plot_performance(curves, ax=perf_ax)
+            assigns_im = plot_assignments(square_assignments, im=assigns_im)
+            perf_ax = plot_performance(curves, ax=perf_ax)
 
             plt.pause(1e-8)
 
@@ -238,7 +238,7 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
     print_results(curves)
 
     for scheme in preds:
-        predictions[scheme] = torch.cat([predictions[scheme], preds[scheme]], -1)
+        predictions[scheme] = torch.cat((predictions[scheme], preds[scheme]), -1)
 
     if train:
         if any([x[-1] > best_accuracy for x in curves.values()]):
@@ -278,13 +278,13 @@ def main(seed=0, n_neurons=100, n_train=60000, n_test=10000, inhib=100, lr=1e-2,
         with open(os.path.join(results_path, name), 'w') as f:
             if train:
                 f.write(
-                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,intensity,'
+                    'random_seed,n_neurons,n_train,inhib,lr,lr_decay,time,timestep,theta_plus,tc_theta_decay,intensity,'
                     'progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
             else:
                 f.write(
-                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,theta_decay,'
+                    'random_seed,n_neurons,n_train,n_test,inhib,lr,lr_decay,time,timestep,theta_plus,tc_theta_decay,'
                     'intensity,progress_interval,update_interval,mean_all_activity,mean_proportion_weighting,'
                     'mean_ngram,max_all_activity,max_proportion_weighting,max_ngram\n'
                 )
@@ -329,7 +329,7 @@ if __name__ == '__main__':
     parser.add_argument('--time', default=350, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1, help='simulation integreation timestep')
     parser.add_argument('--theta_plus', type=float, default=0.05, help='adaptive threshold increase post-spike')
-    parser.add_argument('--theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
+    parser.add_argument('--tc_theta_decay', type=float, default=1e7, help='adaptive threshold decay time constant')
     parser.add_argument('--intensity', type=float, default=0.5, help='constant to multiple input data by')
     parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
     parser.add_argument('--update_interval', default=250, type=int, help='no. examples between evaluation')
