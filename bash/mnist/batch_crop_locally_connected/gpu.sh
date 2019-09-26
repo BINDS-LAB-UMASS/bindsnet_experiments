@@ -20,7 +20,7 @@ lr=${9:-0.01}
 lr_decay=${10:-1}
 time=${11:-100}
 theta_plus=${12:-0.05}
-theta_decay=${13:-1e-7}
+tc_theta_decay=${13:-1e-7}
 intensity=${14:-5}
 norm=${13:-0.2}
 
@@ -33,5 +33,5 @@ echo $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop $l
 python batch_crop_locally_connected.py --train --gpu --seed $seed --n_epochs $n_epochs --batch_size $batch_size\
                                  --inhib $inhib --kernel_size $kernel_size --stride $stride --n_filters $n_filters\
                                   --crop $crop --lr $lr --lr_decay $lr_decay --time $time --theta_plus $theta_plus \
-                                 --theta_decay $theta_decay --intensity $intensity --norm $norm
+                                 --tc_theta_decay $tc_theta_decay --intensity $intensity --norm $norm
 exit

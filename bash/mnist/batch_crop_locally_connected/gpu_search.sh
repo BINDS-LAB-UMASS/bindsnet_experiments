@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-n_epochs=60000
+n_epochs=1
 batch_size=32
 inhib=250
 time=100
 theta_plus=0.05
-theta_decay=1e-7
+tc_theta_decay=1e-7
 norm=0.2
 
 for seed in 0
@@ -25,7 +25,7 @@ do
                             for intensity in 5
                             do
                                 sbatch gpu.sh $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop\
-                                 $lr $lr_decay $time $theta_plus $theta_decay $intensity $norm
+                                 $lr $lr_decay $time $theta_plus $tc_theta_decay $intensity $norm
                             done
                         done
                     done
