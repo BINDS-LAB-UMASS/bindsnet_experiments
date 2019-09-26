@@ -339,8 +339,8 @@ if __name__ == '__main__':
     # Parameters.
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--n-epochs', type=int, default=1, help='no. of training epochs')
-    parser.add_argument('--batch-size', type=int, default=32, help='minibatch size')
+    parser.add_argument('--n_epochs', type=int, default=1, help='no. of training epochs')
+    parser.add_argument('--batch_size', type=int, default=32, help='minibatch size')
     parser.add_argument('--inhib', type=float, default=250, help='inhibition connection strength')
     parser.add_argument('--kernel_size', type=int, nargs='+', default=[16], help='one or two kernel side lengths')
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
