@@ -24,8 +24,8 @@ do
                         do
                             for intensity in 5
                             do
-                                sbatch gpu.sh $seed $kernel_size $stride $n_filters $crop $n_train $n_test $inhib \
-                                              $time $theta_plus $theta_decay $intensity $norm $lr $lr_decay
+                                sbatch gpu.sh $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop\
+                                 $lr $lr_decay $time $theta_plus $theta_decay $intensity $norm
                             done
                         done
                     done
