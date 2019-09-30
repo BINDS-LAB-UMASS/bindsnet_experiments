@@ -16,7 +16,7 @@ kernel_size=${5:-16}
 stride=${6:-2}
 n_filters=${7:-25}
 crop=${8:-0}
-lr=${9:-0.01}
+lr_post=${9:-0.01}
 lr_decay=${10:-1}
 time=${11:-100}
 theta_plus=${12:-0.05}
@@ -27,11 +27,12 @@ norm=${13:-0.2}
 cd ../../../experiments/mnist/
 source activate py36
 
-echo $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop $lr $lr_decay $time $theta_plus \
+echo $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop $lr_post $lr_decay $time $theta_plus \
      $theta_decay $intensity $norm
 
 python batch_crop_locally_connected.py --train --gpu --seed $seed --n_epochs $n_epochs --batch_size $batch_size\
                                  --inhib $inhib --kernel_size $kernel_size --stride $stride --n_filters $n_filters\
-                                  --crop $crop --lr $lr --lr_decay $lr_decay --time $time --theta_plus $theta_plus \
-                                 --tc_theta_decay $tc_theta_decay --intensity $intensity --norm $norm
+                                  --crop $crop --lr_post $lr_post --lr_decay $lr_decay --time $time \
+                                  --theta_plus $theta_plus --tc_theta_decay $tc_theta_decay --intensity $intensity\
+                                   --norm $norm
 exit

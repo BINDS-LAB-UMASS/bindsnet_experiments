@@ -18,14 +18,14 @@ do
             do
                 for crop in 0
                 do
-                    for lr in 1e-2
+                    for lr_post in 1e-2
                     do
                         for lr_decay in 1
                         do
                             for intensity in 5
                             do
                                 sbatch gpu.sh $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop\
-                                 $lr $lr_decay $time $theta_plus $tc_theta_decay $intensity $norm
+                                 $lr_post $lr_decay $time $theta_plus $tc_theta_decay $intensity $norm
                             done
                         done
                     done
