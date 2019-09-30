@@ -150,7 +150,7 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=1,
+            num_workers=0,
             pin_memory=gpu,
         )
 
