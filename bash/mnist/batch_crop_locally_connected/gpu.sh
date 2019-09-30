@@ -22,8 +22,8 @@ time=${11:-100}
 theta_plus=${12:-0.05}
 tc_theta_decay=${13:-1e-7}
 intensity=${14:-5}
-norm=${13:-0.2}
-update_steps=${14:-250}
+norm=${15:-0.2}
+update_steps=${16:-250}
 
 cd ../../../experiments/mnist/
 source activate py36
