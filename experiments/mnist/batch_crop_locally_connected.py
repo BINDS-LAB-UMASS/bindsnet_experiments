@@ -37,15 +37,15 @@ for path in [params_path, spikes_path, curves_path, results_path, confusion_path
         os.makedirs(path)
 
 
-def main(seed=0, n_epochs=1, batch_size=32, update_steps=256, inhib=250, kernel_size=(16,), stride=(2,), time=100,
-         n_filters=25, crop=0, lr_pre=1e-4 ,lr_post=1e-2, lr_decay=1, dt=1, theta_plus=0.05, tc_theta_decay=1e-7,
-         intensity=5, norm=0.2, progress_interval=10, train=True, plot=False, gpu=False):
+def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_size=(16,), stride=(2,), time=100,
+         n_filters=25, crop=0, lr_pre=1e-4, lr_post=1e-2, lr_decay=1, dt=1, theta_plus=0.05, tc_theta_decay=1e-7,
+         intensity=5, norm=0.2, train=True, plot=False, gpu=False):
 
     update_interval = update_steps * batch_size
 
     params = [
         seed, kernel_size, stride, n_filters, crop, lr_pre, lr_post, lr_decay, n_epochs, batch_size,
-        inhib, time, dt, theta_plus, tc_theta_decay, intensity, norm, progress_interval
+        inhib, time, dt, theta_plus, tc_theta_decay, intensity, norm
     ]
 
     model_name = '_'.join([str(x) for x in params])
@@ -53,7 +53,7 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=256, inhib=250, kernel_
     if not train:
         test_params = [
             seed, kernel_size, stride, n_filters, crop, lr_pre, lr_post, lr_decay, n_epochs, batch_size, inhib,
-            time, dt, theta_plus, tc_theta_decay, intensity, norm, progress_interval, update_interval
+            time, dt, theta_plus, tc_theta_decay, intensity, norm, update_interval
         ]
 
     np.random.seed(seed)
@@ -355,7 +355,7 @@ if __name__ == '__main__':
     parser.add_argument('--tc_theta_decay', type=float, default=1e-7, help='adaptive threshold decay time constant')
     parser.add_argument('--intensity', type=float, default=128, help='constant to multiple input data by')
     parser.add_argument('--norm', type=float, default=0.2, help='plastic synaptic weight normalization constant')
-    parser.add_argument('--progress_interval', type=int, default=10, help='interval to print train, test progress')
+    parser.add_argument('--update_steps', type=int, default=250, help='interval to update the labels')
     parser.add_argument('--plot', dest='plot', action='store_true', help='visualize spikes + connection weights')
     parser.add_argument('--train', dest='train', action='store_true', help='train phase')
     parser.add_argument('--test', dest='train', action='store_false', help='train phase')

@@ -7,6 +7,7 @@ time=100
 theta_plus=0.05
 tc_theta_decay=1e-7
 norm=0.2
+update_steps=250
 
 for seed in 0
 do
@@ -25,7 +26,7 @@ do
                             for intensity in 5
                             do
                                 sbatch gpu.sh $seed $n_epochs $batch_size $inhib $kernel_size $stride $n_filters $crop\
-                                 $lr_post $lr_decay $time $theta_plus $tc_theta_decay $intensity $norm
+                                 $lr_post $lr_decay $time $theta_plus $tc_theta_decay $intensity $norm $update_steps
                             done
                         done
                     done
