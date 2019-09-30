@@ -38,13 +38,13 @@ for path in [params_path, spikes_path, curves_path, results_path, confusion_path
 
 
 def main(seed=0, n_epochs=1, batch_size=32, update_steps=256, inhib=250, kernel_size=(16,), stride=(2,), time=100,
-         n_filters=25, crop=0, lr=1e-2, lr_decay=1, dt=1, theta_plus=0.05, tc_theta_decay=1e-7, intensity=5,
-         norm=0.2, progress_interval=10, train=True, plot=False, gpu=False):
+         n_filters=25, crop=0, lr_pre=1e-4 ,lr_post=1e-2, lr_decay=1, dt=1, theta_plus=0.05, tc_theta_decay=1e-7,
+         intensity=5, norm=0.2, progress_interval=10, train=True, plot=False, gpu=False):
 
     update_interval = update_steps * batch_size
 
     params = [
-        seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_epochs, batch_size,
+        seed, kernel_size, stride, n_filters, crop, lr_pre, lr_post, lr_decay, n_epochs, batch_size,
         inhib, time, dt, theta_plus, tc_theta_decay, intensity, norm, progress_interval
     ]
 
@@ -52,7 +52,7 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=256, inhib=250, kernel_
 
     if not train:
         test_params = [
-            seed, kernel_size, stride, n_filters, crop, lr, lr_decay, n_epochs, batch_size, inhib,
+            seed, kernel_size, stride, n_filters, crop, lr_pre, lr_post, lr_decay, n_epochs, batch_size, inhib,
             time, dt, theta_plus, tc_theta_decay, intensity, norm, progress_interval, update_interval
         ]
 
@@ -72,7 +72,7 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=256, inhib=250, kernel_
     if train:
         network = LocallyConnectedNetwork(
             n_inpt=n_inpt, input_shape=[side_length, side_length], kernel_size=kernel_size, stride=stride,
-            n_filters=n_filters, inh=inhib, dt=dt, nu=[0, lr], theta_plus=theta_plus,
+            n_filters=n_filters, inh=inhib, dt=dt, nu=[lr_pre, lr_post], theta_plus=theta_plus,
             tc_theta_decay=tc_theta_decay, wmin=0.0, wmax=1.0, norm=norm
         )
     else:
@@ -346,7 +346,8 @@ if __name__ == '__main__':
     parser.add_argument('--stride', type=int, nargs='+', default=[2], help='one or two horizontal stride lengths')
     parser.add_argument('--n_filters', type=int, default=25, help='no. of convolutional filters')
     parser.add_argument('--crop', type=int, default=4, help='amount to crop images at borders')
-    parser.add_argument('--lr', type=float, default=0.01, help='post-synaptic learning rate')
+    parser.add_argument('--lr_pre', type=float, default=0.0001, help='pre-synaptic learning rate')
+    parser.add_argument('--lr_post', type=float, default=0.01, help='post-synaptic learning rate')
     parser.add_argument('--lr_decay', type=float, default=1, help='rate at which to decay learning rate')
     parser.add_argument('--time', default=100, type=int, help='simulation time')
     parser.add_argument('--dt', type=float, default=1.0, help='simulation integration timestep')
