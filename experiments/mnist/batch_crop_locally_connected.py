@@ -59,7 +59,6 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_
     np.random.seed(seed)
 
     if gpu:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
         torch.cuda.manual_seed_all(seed)
     else:
         torch.manual_seed(seed)
@@ -138,6 +137,9 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_
     else:
         print('\nBegin test.\n')
 
+    if gpu:
+        network.to("cuda")
+
     spike_ims = None
     spike_axes = None
     weights_im = None
@@ -150,8 +152,7 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0,
-            pin_memory=gpu,
+            num_workers=0
         )
 
         for step, batch in enumerate(tqdm(dataloader)):
@@ -200,8 +201,6 @@ def main(seed=0, n_epochs=1, batch_size=32, update_steps=250, inhib=250, kernel_
 
                     # Compute ngram scores.
                     ngram_scores = update_ngram_scores(spike_record, label_tensor, n_classes, 2, ngram_scores)
-
-                print()
 
                 # Assign labels to excitatory layer neurons.
                 assignments, proportions, rates = assign_labels(
